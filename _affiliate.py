@@ -49,5 +49,5 @@ def get_cookies():
 
 
 if __name__ == '__main__':
-    # print(get_cookies())
     __login()
+    print(get_cookies())

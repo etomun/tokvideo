@@ -69,8 +69,8 @@ def get_tiktok_url(keyword: str) -> str:
         if page.locator('div[id=tiktok-verify-ele]').count() > 0:
             print('Captcha Detected')
         else:
-            time.sleep(3)
-            list_video = page.locator('div[id=tabs-0-panel-search_video]')
+            # time.sleep(3)
+            list_video = page.wait_for_selector('div[id=tabs-0-panel-search_video]', timeout=7000)
             return Selector(text=list_video.inner_html()).css('a').xpath('@href').get()
 
 

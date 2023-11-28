@@ -1,3 +1,4 @@
+import os
 import shutil
 from os import makedirs
 from pathlib import PurePosixPath
@@ -37,7 +38,7 @@ def __ssstik_requests(tiktok_url: str):
     params = {'url': 'dl', }
     data = {'id': tiktok_url, 'locale': 'en', 'tt': 'cjhDVEdl', }
     r = requests.post('https://ssstik.io/abc', params=params, cookies=__cookies, headers=__headers, data=data)
-    print(f'submit by requests: {tiktok_url}\n{r}')
+    print(f'{r}: Generated Tiktok link by requests {tiktok_url}')
 
 
 def __ssstik_pw(tiktok_url: str):
@@ -48,7 +49,7 @@ def __ssstik_pw(tiktok_url: str):
         p.goto("https://ssstik.io/en")
         p.fill('input#main_page_text', tiktok_url)
         p.click('button#submit')
-        print(f'submit by playwright: {tiktok_url}')
+        print(f'Generated Tiktok link by requests: {tiktok_url}')
         # Continue Download Here
         # p.get_by_role("link", name="Without watermark").click()
         # with p.expect_download() as download_info:
@@ -68,10 +69,11 @@ def download_shop_ee_video(video_url: str, shop_url: str) -> str:
     makedirs(file_dir, exist_ok=True)
 
     with requests.get(video_url, stream=True) as r:
-        print(f'Response: {r.raise_for_status()}')
         with open(file, 'wb') as f:
             r.raw.decode_content = True
             shutil.copyfileobj(r.raw, f, length=8 * 1024)
+    size = os.path.getsize(file) / (1024 * 1024)
+    print(f'Shop*ee video downloaded {file} - {size}MB')
     return file
 
 
@@ -82,18 +84,25 @@ def download_tiktok_video(tiktok_url: str, shop_url: str) -> str:
     url = f'https://tikcdn.io/ssstik/{video_id}'
     file_dir = f'data/videos/{shop_path}/{product_path}'
     file = f'{file_dir}/{video_id}.mp4'
-    makedirs(file_dir, exist_ok=True)
 
-    with requests.get(url, cookies=__cookies, headers=__headers, stream=True) as r:
-        print(f'Response: {r.raise_for_status()}')
-        with open(file, 'wb') as f:
-            r.raw.decode_content = True
-            shutil.copyfileobj(r.raw, f, length=8 * 1024)
-    return file
+    if os.path.exists(file) and os.path.getsize(file) > 0:
+        size = round(os.path.getsize(file) / (1024 * 1024))
+        print(f'Tiktok video already exists {file} - {size} MB')
+        return file
+    else:
+        makedirs(file_dir, exist_ok=True)
+        with requests.get(url, cookies=__cookies, headers=__headers, stream=True) as r:
+            with open(file, 'wb') as f:
+                r.raw.decode_content = True
+                shutil.copyfileobj(r.raw, f, length=8 * 1024)
+        size = round(os.path.getsize(file) / (1024 * 1024))
+        print(f'Tiktok video downloaded {file} - {size} MB')
+        return file
 
-# if __name__ == '__main__':
-#     download_tiktok_video('https://www.tiktok.com/@dapuristrii.aw/video/7279286245308501253',
-#                           'https://shopee.co.id/product/307192440/12350902437')
+
+if __name__ == '__main__':
+    download_tiktok_video('https://www.tiktok.com/@khikmamakfiro/video/7265248373656096006',
+                          'https://shopee.co.id/product/378273492/4996092496')
 #
 #     # download_tiktok_shop_ee('https://down-cvs-sg.vod.susercontent.com/c3/98934353/105/A3oxOF3KAEhOGXwKERABACY.mp4',
 #     #                         'https://shopee.co.id/product/40847197/15576892572')
