@@ -7,36 +7,14 @@ from urllib.parse import unquote, urlparse
 import requests
 from playwright.sync_api import sync_playwright
 
-__cookies = {
-    '_ga': 'GA1.1.179538163.1700803879',
-    '__gads': 'ID=6e408608e499df57:T=1700803879:RT=1700833720:S=ALNI_MaGe9bfTzCkJx50hc114A_ASq8QFA',
-    '_ga_ZSF3D6YSLC': 'GS1.1.1700833720.2.0.1700833865.0.0.0',
-}
+__cookies = {}
 
-__headers = {
-    'authority': 'ssstik.io',
-    'accept': '*/*',
-    'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8,fr;q=0.7',
-    'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-    'hx-current-url': 'https://ssstik.io/en',
-    'hx-request': 'true',
-    'hx-target': 'target',
-    'hx-trigger': '_gcaptcha_pt',
-    'origin': 'https://ssstik.io',
-    'referer': 'https://ssstik.io/en',
-    'sec-ch-ua': '"Google Chrome";v="119", "Chromium";v="119", "Not?A_Brand";v="24"',
-    'sec-ch-ua-mobile': '?0',
-    'sec-ch-ua-platform': '"macOS"',
-    'sec-fetch-dest': 'empty',
-    'sec-fetch-mode': 'cors',
-    'sec-fetch-site': 'same-origin',
-    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-}
+__headers = {}
 
 
 def __ssstik_requests(tiktok_url: str):
     params = {'url': 'dl', }
-    data = {'id': tiktok_url, 'locale': 'en', 'tt': 'cjhDVEdl', }
+    data = {'id': tiktok_url, 'locale': 'en', 'tt': '', }
     r = requests.post('https://ssstik.io/abc', params=params, cookies=__cookies, headers=__headers, data=data)
     print(f'{r}: Generated Tiktok link by requests {tiktok_url}')
 
