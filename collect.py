@@ -74,41 +74,41 @@ def __parse_response(filtered_products: list, keyword: str = "") -> dict:
     links = list(map(lambda p: p['product_link'], filtered_products))
     seller_rates = list(map(lambda p: __clean_int(p['seller_commission_rate']), filtered_products))
     default_rates = list(map(lambda p: __clean_int(p['default_commission_rate']), filtered_products))
-    total_rates = list(map(
-        lambda p: __clean_int(p['seller_commission_rate']) + __clean_int(p['default_commission_rate']),
-        filtered_products))
+    total_rates = [s + d for s, d in zip(seller_rates, default_rates)]
     images = list(map(lambda p: p['batch_item_for_item_card_full']['image'], filtered_products))
     videos = list(map(__get_shop_video, filtered_products))
     stocks = list(map(lambda p: p['batch_item_for_item_card_full']['stock'], filtered_products))
     ratings = list(map(lambda p: p['batch_item_for_item_card_full']['shop_rating'], filtered_products))
-    prices = list(map(lambda p: p['batch_item_for_item_card_full']['price'], filtered_products))
+    prices = list(map(lambda p: p['batch_item_for_item_card_full']['price'] / 10000, filtered_products))
     is_officials = list(map(lambda p: p['batch_item_for_item_card_full']['is_official_shop'], filtered_products))
+    est_commissions = [r * p * 0.01 for r, p in zip(total_rates, prices)]
     keywords = [keyword] * filtered_count
     is_uploads = [False] * filtered_count
 
     tiktok_keywords = list(map(__generate_tit_kok_keywords, shop_names, titles))
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        tiktok_videos = list(executor.map(get_tiktok_url, tiktok_keywords))
-        data = {
-            C_KEYWORD: keywords,
-            C_TITLE: titles,
-            C_SHOP_NAME: shop_names,
-            C_TIKTOK_K: tiktok_keywords,
-            C_LINK: links,
-            C_VIDEO: videos,
-            C_TIKTOK_V: tiktok_videos,
-            C_IS_UPLOADED: is_uploads,
-            C_TOTAL_RATE: total_rates,
-            C_RATING: ratings,
-            C_STOCK: stocks,
-            C_PRICE: prices,
-            C_IMAGE: images,
-            C_SELLER_RATE: seller_rates,
-            C_DEFAULT_RATE: default_rates,
-            C_SHOP_ID: shop_ids,
-            C_ID: product_ids,
-            C_IS_OFFICIAL: is_officials
-        }
+        tiktok_videos = list(executor.map(lambda k: get_tiktok_url, tiktok_keywords))
+    data = {
+        C_IS_UPLOADED: is_uploads,
+        C_KEYWORD: keywords,
+        C_TIKTOK_K: tiktok_keywords,
+        C_LINK: links,
+        C_TIKTOK_V: tiktok_videos,
+        C_VIDEO: videos,
+        C_TITLE: titles,
+        C_SHOP_NAME: shop_names,
+        C_STOCK: stocks,
+        C_EST_COMM: est_commissions,
+        C_PRICE: prices,
+        C_TOTAL_RATE: total_rates,
+        C_SELLER_RATE: seller_rates,
+        C_DEFAULT_RATE: default_rates,
+        C_RATING: ratings,
+        C_IMAGE: images,
+        C_SHOP_ID: shop_ids,
+        C_ID: product_ids,
+        C_IS_OFFICIAL: is_officials
+    }
 
     return data
 

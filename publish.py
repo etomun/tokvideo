@@ -32,13 +32,13 @@ def _get_random_entries(count: int, additional_count: int = 0) -> DataFrameGroup
 
         additional_rows = pd.DataFrame()
         for i, row in random_1.iterrows():
-            extracted_title = _first_n_words(row[C_TITLE])
-            cond_2 = cond_1 & df[C_TITLE].str.contains(extracted_title) & (df.index != i)
+            tiktok_keywords = _first_n_words(row[C_TIKTOK_K])
+            cond_2 = cond_1 & df[C_TIKTOK_K].str.contains(tiktok_keywords) & (df.index != i)
             random_2 = df[cond_2].sample(n=additional_count, replace=True) if len(df[cond_2]) > 0 else pd.DataFrame()
             additional_rows = pd.concat([additional_rows, random_2])
 
         combined = pd.concat([random_1, additional_rows])
-        return combined.groupby(df[C_TITLE].apply(_first_n_words))
+        return combined.groupby(df[C_TIKTOK_K].apply(_first_n_words))
 
 
 def _set_entry_uploaded(index: int) -> bool:
@@ -163,35 +163,33 @@ def _publish_video(i: int, video_file: str, product_link: str, caption: str):
             print('-----------------------------------------------------------------------------------------------\n\n')
 
 
-def _fallback(row: int, product_link: str, video_link: str):
-    print(f'Data is not eligible: [{row}] {product_link} - {video_link}\n')
-    print('-----------------------------------------------------------------------------------------------\n\n')
-
-
 def _non_empty_str(val) -> bool:
     return isinstance(val, str) and bool(val.strip()) if val is not None else False
 
 
-def process_data(data):
+def _non_empty_file(file) -> bool:
+    path = Path(file)
+    return path.stat().st_size > 0 if path.is_file() is not None else False
+
+
+def process_data(groups: DataFrameGroupBy):
     uploaded_datas.clear()
-    for i in data.index:
-        product, tiktok, video, keyword = data[C_LINK][i], data[C_TIKTOK_V][i], data[C_VIDEO][i], data[C_TIKTOK_K][i]
+
+    # data is DataFrame containing multiple rows
+    for d in groups:
+
+        product, tiktok, video, keyword = d[C_LINK][i], d[C_TIKTOK_V][i], d[C_VIDEO][i], d[C_TIKTOK_K][i]
         desc = keyword[:70] if len(keyword) >= 70 else keyword
         caption = f"#RacunShopee #ViralDiShopeeVideo  #ShopeeHaul #ShopeeDiskon #ShopeeGratisOngkir {desc}"
 
         if _non_empty_str(tiktok):
             tiktok_video = download_tiktok_video(tiktok, product)
-            if os.path.getsize(tiktok_video) > 0 and _set_favorite_product(product, True):
+            if _non_empty_file(tiktok_video) and _set_favorite_product(product, True):
                 _publish_video(i, tiktok_video, product, caption)
             else:
-                _fallback((i + 2), product, tiktok)
-
-        if _non_empty_str(video):
-            shop_ee_video = download_shop_ee_video(video, product)
-            if os.path.getsize(shop_ee_video) > 0 and _set_favorite_product(product, True):
-                _publish_video(i, shop_ee_video, product, caption)
-            else:
-                _fallback((i + 2), product, video)
+                print(f'Data is not eligible: [{d}] {product_link} - {video_link}\n')
+                print(
+                    '-----------------------------------------------------------------------------------------------\n\n')
 
     print('\n\n'.join(uploaded_datas))
     print(f'\nTOTAL UPLOADED: {len(uploaded_datas)}')
@@ -220,7 +218,7 @@ def main():
     groups = _get_random_entries(count, additional_count)
     for group, d in groups:
         print(f'{group} --> {d.index} -> {(d[C_LINK]).tolist()}')
-    # process_data(data)
+    # process_data(groups) if len(groups) > 0 else print('No available data. Run collect.py to get more data.')
 
 
 if __name__ == '__main__':
