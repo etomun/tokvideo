@@ -57,11 +57,13 @@ def __tiktok_page() -> tuple[Page]:
         except FileNotFoundError:
             pass
         yield context.new_page()
+        context.close()
 
 
 def get_tiktok_url(keyword: str) -> str:
+    funny = f'{keyword} #funny'
     with __tiktok_page() as (page):
-        page.goto(f"https://www.tiktok.com/search/video?q={keyword}")
+        page.goto(f"https://www.tiktok.com/search/video?q={funny}")
 
         # HEADED for captcha:
         # time.sleep(15)
@@ -69,8 +71,7 @@ def get_tiktok_url(keyword: str) -> str:
         if page.locator('div[id=tiktok-verify-ele]').count() > 0:
             print('Captcha Detected')
         else:
-            # time.sleep(3)
-            list_video = page.wait_for_selector('div[id=tabs-0-panel-search_video]', timeout=7000)
+            list_video = page.wait_for_selector('div[id=tabs-0-panel-search_video]', timeout=10*1000)
             return Selector(text=list_video.inner_html()).css('a').xpath('@href').get()
 
 
@@ -86,4 +87,5 @@ def _get_cookies():
 
 if __name__ == '__main__':
     # print(_get_cookies())
+    # print(get_tiktok_url('Koch'))
     __login()

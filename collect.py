@@ -124,8 +124,13 @@ def __search_products(keyword_limit: dict) -> dict:
 
     response = session.request("GET", url, cookies=affiliate_cookies, headers=affiliate_headers,
                                params=querystring).json()
-    products = response['data']['list']
-    if not products:
+    products = []
+    try:
+        products = response['data']['list']
+    except Exception:
+        pass
+
+    if len(products) <= 0:
         print(response)
     filtered_products = list(filter(__filter_product, products))
 

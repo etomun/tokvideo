@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse, unquote
 
@@ -7,7 +8,7 @@ import pandas as pd
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
 from appium.webdriver.common.appiumby import AppiumBy as By
-from pandas import DataFrame
+from pandas.core.groupby import DataFrameGroupBy
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
 
@@ -18,15 +19,26 @@ from _ssstik import download_tiktok_video, download_shop_ee_video
 uploaded_datas = []
 
 
-def _get_random_entries(count: int) -> DataFrame:
-    try:
-        if Path(df_file).exists():
-            df = pd.read_csv(df_file)
-            f_df = df[(df[C_IS_UPLOADED] == False) & (df[C_STOCK] > 1)]
-            return f_df.sample(count, replace=False) if count <= len(f_df) else df
+def _first_n_words(words: str):
+    words = re.findall(r'\b\w+\b', words)
+    return ' '.join(words[:3])
 
-    except FileNotFoundError:
-        pass
+
+def _get_random_entries(count: int, additional_count: int = 0) -> DataFrameGroupBy:
+    if Path(df_file).exists():
+        df = pd.read_csv(df_file)
+        cond_1 = (df[C_IS_UPLOADED] == False) & (df[C_STOCK] > 1)
+        random_1 = df[cond_1].sample(count, replace=False) if count <= len(df[cond_1]) else df
+
+        additional_rows = pd.DataFrame()
+        for i, row in random_1.iterrows():
+            extracted_title = _first_n_words(row[C_TITLE])
+            cond_2 = cond_1 & df[C_TITLE].str.contains(extracted_title) & (df.index != i)
+            random_2 = df[cond_2].sample(n=additional_count, replace=True) if len(df[cond_2]) > 0 else pd.DataFrame()
+            additional_rows = pd.concat([additional_rows, random_2])
+
+        combined = pd.concat([random_1, additional_rows])
+        return combined.groupby(df[C_TITLE].apply(_first_n_words))
 
 
 def _set_entry_uploaded(index: int) -> bool:
@@ -71,7 +83,7 @@ def _remove_from_remote_device(video_file: str) -> bool:
 
 def _set_favorite_product(product_link: str, like: bool) -> bool:
     shop_id, product_id = PurePosixPath(unquote(urlparse(product_link).path)).parts[-2:]
-    print(f'Request set favorite {like} to {product_link}')
+    print(f'Perform curl to set favorite {like} to {product_link}')
     return _curl.set_fav_product(like, shop_id, product_id)
 
 
@@ -139,6 +151,7 @@ def _publish_video(i: int, video_file: str, product_link: str, caption: str):
             # Succeed
             global uploaded_datas
             uploaded_datas.append(f'[{i + 2}] {product_link} -- {video_file}')
+            _set_entry_uploaded(i)
             print(f'\n\n((( POSTED VIDEO ))) [{i + 2}] {product_link} -- {video_file} -- {caption}\n\n')
 
         except Exception as e:
@@ -147,7 +160,6 @@ def _publish_video(i: int, video_file: str, product_link: str, caption: str):
         finally:
             _remove_from_remote_device(video_file)
             _set_favorite_product(product_link, False)
-            _set_entry_uploaded(i)
             print('-----------------------------------------------------------------------------------------------\n\n')
 
 
@@ -201,10 +213,14 @@ def __reset_all_uploaded_to_false():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("count", type=int, default=5)
+    parser.add_argument('--grouped', '-g', action='store_true', help='Enable grouping products')
     args = parser.parse_args()
     count = args.count
-    data = _get_random_entries(count)
-    process_data(data)
+    additional_count = 2 if args.grouped else 0
+    groups = _get_random_entries(count, additional_count)
+    for group, d in groups:
+        print(f'{group} --> {d.index} -> {(d[C_LINK]).tolist()}')
+    # process_data(data)
 
 
 if __name__ == '__main__':
