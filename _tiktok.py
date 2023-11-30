@@ -47,9 +47,9 @@ def __login():
 
 
 @contextlib.contextmanager
-def __tiktok_page() -> tuple[Page]:
+def __tiktok_page(headless: bool = True) -> tuple[Page]:
     with sync_playwright() as playwright:
-        context = playwright.chromium.launch(headless=True).new_context()
+        context = playwright.chromium.launch(headless=headless).new_context()
         try:
             with open("data/auth/tiktok_cookies.json", "r") as f:
                 cookies = json.loads(f.read())
@@ -62,16 +62,17 @@ def __tiktok_page() -> tuple[Page]:
 
 def get_tiktok_url(keyword: str) -> str:
     funny = f'{keyword} #funny'
-    with __tiktok_page() as (page):
+    with __tiktok_page(headless=True) as (page):
         page.goto(f"https://www.tiktok.com/search/video?q={funny}")
 
-        # HEADED for captcha:
+        # HEADED (headless=False) for captcha):
         # time.sleep(15)
 
         if page.locator('div[id=tiktok-verify-ele]').count() > 0:
             print('Captcha Detected')
         else:
-            list_video = page.wait_for_selector('div[id=tabs-0-panel-search_video]', timeout=10*1000)
+            time.sleep(3)
+            list_video = page.wait_for_selector('div[id=tabs-0-panel-search_video]', timeout=10 * 1000)
             return Selector(text=list_video.inner_html()).css('a').xpath('@href').get()
 
 

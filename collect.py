@@ -23,10 +23,10 @@ def __get_args() -> Namespace:
 
 def __filter_product(p: dict) -> bool:
     name = p['batch_item_for_item_card_full']['name']
-    price = __clean_int(p['batch_item_for_item_card_full']['price'])
+    price = __int(p['batch_item_for_item_card_full']['price'])
     stock = p['batch_item_for_item_card_full']['stock']
 
-    filter_rate = __clean_int(p['seller_commission_rate']) + __clean_int(p['default_commission_rate']) >= 10
+    filter_rate = __int(p['seller_commission_rate']) + __int(p['default_commission_rate']) >= 10
     filter_rating = p['batch_item_for_item_card_full']['shop_rating'] >= 4.5
     filter_selling = p['batch_item_for_item_card_full']['historical_sold'] >= 50
     filter_stock = stock >= 100 if price < 10000 * 100000 else stock >= 10
@@ -60,7 +60,7 @@ def __generate_tit_kok_keywords(shop_name: str, product_title: str) -> str:
     return t_first_7 if s_1st_word.lower() == t_1st_word.lower() else s_1st_word + ' ' + t_first_7
 
 
-def __clean_int(str_val: str) -> int:
+def __int(str_val: str) -> int:
     return int(re.sub(r"\D", "", str_val))
 
 
@@ -72,22 +72,22 @@ def __parse_response(filtered_products: list, keyword: str = "") -> dict:
     shop_ids = list(map(lambda p: p['batch_item_for_item_card_full']['shopid'], filtered_products))
     shop_names = list(map(lambda p: p['batch_item_for_item_card_full']['shop_name'], filtered_products))
     links = list(map(lambda p: p['product_link'], filtered_products))
-    seller_rates = list(map(lambda p: __clean_int(p['seller_commission_rate']), filtered_products))
-    default_rates = list(map(lambda p: __clean_int(p['default_commission_rate']), filtered_products))
+    seller_rates = list(map(lambda p: __int(p['seller_commission_rate']), filtered_products))
+    default_rates = list(map(lambda p: __int(p['default_commission_rate']), filtered_products))
     total_rates = [s + d for s, d in zip(seller_rates, default_rates)]
     images = list(map(lambda p: p['batch_item_for_item_card_full']['image'], filtered_products))
     videos = list(map(__get_shop_video, filtered_products))
     stocks = list(map(lambda p: p['batch_item_for_item_card_full']['stock'], filtered_products))
     ratings = list(map(lambda p: p['batch_item_for_item_card_full']['shop_rating'], filtered_products))
-    prices = list(map(lambda p: p['batch_item_for_item_card_full']['price'] / 10000, filtered_products))
+    prices = list(map(lambda p: __int(p['batch_item_for_item_card_full']['price']) / 100000, filtered_products))
     is_officials = list(map(lambda p: p['batch_item_for_item_card_full']['is_official_shop'], filtered_products))
-    est_commissions = [r * p * 0.01 for r, p in zip(total_rates, prices)]
+    est_commissions = [r * p * 0.01 for r, p in zip(seller_rates, prices)]
     keywords = [keyword] * filtered_count
     is_uploads = [False] * filtered_count
 
     tiktok_keywords = list(map(__generate_tit_kok_keywords, shop_names, titles))
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        tiktok_videos = list(executor.map(lambda k: get_tiktok_url, tiktok_keywords))
+        tiktok_videos = list(executor.map(get_tiktok_url, tiktok_keywords))
     data = {
         C_IS_UPLOADED: is_uploads,
         C_KEYWORD: keywords,
