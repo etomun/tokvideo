@@ -8,6 +8,7 @@ import pandas as pd
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
 from appium.webdriver.common.appiumby import AppiumBy as By
+from pandas import DataFrame
 from pandas.core.groupby import DataFrameGroupBy
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
@@ -28,16 +29,17 @@ def _get_random_entries(count: int, additional_count: int = 0) -> DataFrameGroup
     if Path(df_file).exists():
         df = pd.read_csv(df_file)
         cond_1 = (df[C_IS_UPLOADED] == False) & (df[C_STOCK] > 1)
-        random_1 = df[cond_1].sample(count, replace=False) if count <= len(df[cond_1]) else df
+        random_1 = df[cond_1].sample(count, replace=True) if count <= len(df[cond_1]) else df
 
+        # Append similar products
         additional_rows = pd.DataFrame()
         for i, row in random_1.iterrows():
             tiktok_keywords = _first_n_words(row[C_TIKTOK_K])
             cond_2 = cond_1 & df[C_TIKTOK_K].str.contains(tiktok_keywords) & (df.index != i)
             random_2 = df[cond_2].sample(n=additional_count, replace=True) if len(df[cond_2]) > 0 else pd.DataFrame()
-            additional_rows = pd.concat([additional_rows, random_2])
+            additional_rows = pd.concat([additional_rows, random_2], ignore_index=True, verify_integrity=True)
 
-        combined = pd.concat([random_1, additional_rows])
+        combined = pd.concat([random_1, additional_rows], ignore_index=True, verify_integrity=True)
         return combined.groupby(df[C_TIKTOK_K].apply(_first_n_words))
 
 
@@ -87,7 +89,7 @@ def _set_favorite_product(product_link: str, like: bool) -> bool:
     return _curl.set_fav_product(like, shop_id, product_id)
 
 
-def _publish_video(i: int, video_file: str, product_link: str, caption: str):
+def _publish_video(video_file: str, caption: str, products: DataFrame):
     if _push_to_remote_device(video_file):
         driver = webdriver.Remote(f"http://127.0.0.1:4723", options=options)
         wait = WebDriverWait(driver, 7)
@@ -104,6 +106,7 @@ def _publish_video(i: int, video_file: str, product_link: str, caption: str):
         path_add_product_1 = "(//android.widget.TextView[@text=\"Tambah\"])[1]"
         path_done_add_product = "//android.widget.FrameLayout[@resource-id=\"android:id/content\"]/android.widget.FrameLayout/android.widget.FrameLayout/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup[2]"
         id_attach_product = "com.shopee.id.dfpluginshopee16:id/ll_add_product_symbol"
+        id_add_more_product = "com.shopee.id.dfpluginshopee16:id/tv_add_more"
         id_caption = "com.shopee.id.dfpluginshopee16:id/et_caption"
         id_share_dialog = "com.shopee.id:id/md_button_layout"
 
@@ -119,14 +122,13 @@ def _publish_video(i: int, video_file: str, product_link: str, caption: str):
 
             # Find the gallery album and select video
             rect = driver.get_window_size()
-            start_x = rect['width'] // 2
-            start_y = rect['height'] * 0.8
-            end_y = rect['height'] * 0.2
+            center_x = rect['width'] // 2
+            bottom_y = rect['height']
 
             wait.until(ec.presence_of_all_elements_located((By.ID, "com.shopee.id:id/rv_folder")))
             album_locator = By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("{}")'.format(album_name)
             while not driver.find_elements(*album_locator):
-                driver.swipe(start_x, start_y, start_x, end_y, 100)
+                driver.swipe(center_x, bottom_y * 0.8, center_x, bottom_y * 0.2, 100)
             driver.find_element(*album_locator).click()
             videos = wait.until(ec.presence_of_all_elements_located((By.ID, "com.shopee.id:id/iv_picture")))
             videos[0].click()
@@ -134,11 +136,21 @@ def _publish_video(i: int, video_file: str, product_link: str, caption: str):
             # Start Posting
             wait.until(ec.visibility_of_element_located((By.XPATH, path_edit_continue_1))).click()
             wait.until(ec.visibility_of_element_located((By.ID, "com.shopee.id:id/tv_compress"))).click()
-            wait.until(ec.visibility_of_element_located((By.ID, id_attach_product))).click()
-            wait.until(ec.visibility_of_element_located((By.XPATH, path_affiliate_tab))).click()
-            wait.until(ec.visibility_of_element_located((By.XPATH, path_fav_tab))).click()
-            wait.until(ec.visibility_of_element_located((By.XPATH, path_add_product_1))).click()
-            wait.until(ec.visibility_of_element_located((By.XPATH, path_done_add_product))).click()
+
+            # Loop attach products
+            for i, r in enumerate(products):
+                add_id = id_attach_product if i == 0 else id_add_more_product
+                wait.until(ec.visibility_of_element_located((By.ID, add_id))).click()
+                wait.until(ec.visibility_of_element_located((By.XPATH, path_affiliate_tab))).click()
+                wait.until(ec.visibility_of_element_located((By.XPATH, path_fav_tab))).click()
+                btn_add_locator = By.ANDROID_UIAUTOMATOR, 'new UiSelector().xpath("' + path_add_product_1 + '")'
+                while not driver.find_elements(*btn_add_locator):
+                    driver.swipe(center_x, bottom_y * 0.7, center_x, bottom_y * 0.5, 700)
+                driver.find_element(*btn_add_locator).click()
+
+                wait.until(ec.visibility_of_element_located((By.XPATH, path_add_product_1))).click()
+                wait.until(ec.visibility_of_element_located((By.XPATH, path_done_add_product))).click()
+
             v_desc = wait.until(ec.visibility_of_element_located((By.ID, id_caption)))
             v_desc.click()
             v_desc.send_keys(caption)
@@ -146,20 +158,22 @@ def _publish_video(i: int, video_file: str, product_link: str, caption: str):
             wait.until(ec.visibility_of_element_located((By.ID, "com.shopee.id.dfpluginshopee16:id/btn_post"))).click()
 
             WebDriverWait(driver, 17).until(ec.visibility_of_element_located((By.ID, id_share_dialog)))
-            driver.quit()
-
             # Succeed
+            for i in products.index:
+                _set_entry_uploaded(i)
+
             global uploaded_datas
-            uploaded_datas.append(f'[{i + 2}] {product_link} -- {video_file}')
-            _set_entry_uploaded(i)
-            print(f'\n\n((( POSTED VIDEO ))) [{i + 2}] {product_link} -- {video_file} -- {caption}\n\n')
+            uploaded_datas.append(f'{video_file} -- {products}')
+            print(f'\n\n((( VIDEO UPLOADED ))) {video_file} for {len(products)} products \n\n')
 
         except Exception as e:
             print(e)
 
         finally:
             _remove_from_remote_device(video_file)
-            _set_favorite_product(product_link, False)
+            for product in products:
+                _set_favorite_product(product, False)
+            driver.quit()
             print('-----------------------------------------------------------------------------------------------\n\n')
 
 
@@ -176,20 +190,28 @@ def process_data(groups: DataFrameGroupBy):
     uploaded_datas.clear()
 
     # data is DataFrame containing multiple rows
-    for d in groups:
-
+    for group, data in groups:
+        # choose one with the highest commission
+        i = data[C_EST_COMM].idxmax()
+        d = data.loc[i]
         product, tiktok, video, keyword = d[C_LINK][i], d[C_TIKTOK_V][i], d[C_VIDEO][i], d[C_TIKTOK_K][i]
         desc = keyword[:70] if len(keyword) >= 70 else keyword
-        caption = f"#RacunShopee #ViralDiShopeeVideo  #ShopeeHaul #ShopeeDiskon #ShopeeGratisOngkir {desc}"
+        caption = f"{desc} #RacunShopee #ViralDiShopeeVideo #BadaiTapiBudget #SultanShopeeVideo"
 
         if _non_empty_str(tiktok):
             tiktok_video = download_tiktok_video(tiktok, product)
-            if _non_empty_file(tiktok_video) and _set_favorite_product(product, True):
-                _publish_video(i, tiktok_video, product, caption)
+            if _non_empty_file(tiktok_video) and _set_favorite_product(data[C_LINK], True):
+                _publish_video(tiktok_video, caption, data)
             else:
-                print(f'Data is not eligible: [{d}] {product_link} - {video_link}\n')
-                print(
-                    '-----------------------------------------------------------------------------------------------\n\n')
+                print(f'Cant upload video: [{i}] {tiktok_video}\n')
+                print('-------------------------------------------------------------------------------------------\n\n')
+        elif _non_empty_str(video):
+            shop_video = download_shop_ee_video(video, product)
+            if _non_empty_file(shop_video) and _set_favorite_product(data[C_LINK], True):
+                _publish_video(shop_video, caption, data)
+            else:
+                print(f'Data is not eligible: [{i}] {shop_video}\n')
+                print('-------------------------------------------------------------------------------------------\n\n')
 
     print('\n\n'.join(uploaded_datas))
     print(f'\nTOTAL UPLOADED: {len(uploaded_datas)}')
@@ -217,7 +239,7 @@ def main():
     additional_count = 2 if args.grouped else 0
     groups = _get_random_entries(count, additional_count)
     for group, d in groups:
-        print(f'{group} --> {d.index} -> {(d[C_LINK]).tolist()}')
+        print(f'{group} -> {d[C_LINK]}')
     # process_data(groups) if len(groups) > 0 else print('No available data. Run collect.py to get more data.')
 
 

@@ -66,7 +66,7 @@ def get_tiktok_url(keyword: str) -> str:
         page.goto(f"https://www.tiktok.com/search/video?q={funny}")
 
         # HEADED (headless=False) for captcha):
-        # time.sleep(15)
+        time.sleep(15)
 
         if page.locator('div[id=tiktok-verify-ele]').count() > 0:
             print('Captcha Detected')
