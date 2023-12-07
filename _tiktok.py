@@ -60,20 +60,30 @@ def __tiktok_page(headless: bool = True) -> tuple[Page]:
         context.close()
 
 
-def get_tiktok_url(keyword: str) -> str:
-    funny = f'{keyword} #funny'
-    with __tiktok_page(headless=True) as (page):
-        page.goto(f"https://www.tiktok.com/search/video?q={funny}")
+def get_tiktok_url(keyword: str, is_headless: bool = True) -> str:
+    with __tiktok_page(headless=is_headless) as (page):
+        page.goto(f"https://www.tiktok.com/search/video?q={keyword} #howto")
 
         # HEADED (headless=False) for captcha):
-        time.sleep(15)
+        if not is_headless:
+            time.sleep(17)
 
-        if page.locator('div[id=tiktok-verify-ele]').count() > 0:
+        if is_headless and page.locator('div[id=tiktok-verify-ele]').count() > 0:
             print('Captcha Detected')
+            exit(0)
         else:
             time.sleep(3)
             list_video = page.wait_for_selector('div[id=tabs-0-panel-search_video]', timeout=10 * 1000)
             return Selector(text=list_video.inner_html()).css('a').xpath('@href').get()
+
+            # selector = 'div[data-e2e="search_video-item-list"]'
+            # div_videos = page.wait_for_selector(selector, timeout=10 * 1000).inner_html()
+            # soup = BS(div_videos, 'html.parser')
+            # links = []
+            # for link in soup.find_all('a', href=lambda href: href and 'https://www.tiktok.com/@' in href):
+            #     links.append(link['href'])
+            # print(links)
+            # return links
 
 
 def _get_cookies():

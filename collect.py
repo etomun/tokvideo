@@ -15,9 +15,10 @@ from _tiktok import get_tiktok_url
 
 def __get_args() -> Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-k", "--keywords", help="White space not accepted, replace with -. Separate keys with ,",
+    parser.add_argument("--keywords", "-k", help="White space not accepted, replace with -. Separate keys with ,",
                         type=str, default="")
-    parser.add_argument("-l", "--limit", help="limit the offers results", type=int, default=50)
+    parser.add_argument("--limit", "-l", help="limit the offers results", type=int, default=50)
+    parser.add_argument("--headed", "-ht", action="store_true", help="Enable headed tiktok for captcha", default=False)
     return parser.parse_args()
 
 
@@ -28,19 +29,22 @@ def __filter_product(p: dict) -> bool:
 
     filter_rate = __int(p['seller_commission_rate']) + __int(p['default_commission_rate']) >= 10
     filter_rating = p['batch_item_for_item_card_full']['shop_rating'] >= 4.5
-    filter_selling = p['batch_item_for_item_card_full']['historical_sold'] >= 50
+    filter_selling = p['batch_item_for_item_card_full']['historical_sold'] >= 30
     filter_stock = stock >= 100 if price < 10000 * 100000 else stock >= 10
 
+    result = filter_rate & filter_rating & filter_selling & filter_stock
+    if not result:
+        print(f'Filtered {name}')
     if not filter_rate:
-        print(f'Commission under 10% for {name}')
+        print(f'Commission under 10%')
     if not filter_rating:
-        print(f'Rating under 4.5 for {name}')
+        print(f'Rating under 4.5')
     if not filter_selling:
-        print(f'Selling under 50 items for {name}')
+        print(f'Selling under 30 items')
     if not filter_stock:
-        print(f'Out of stock for {name}')
+        print(f'Out of stock')
 
-    return filter_rate & filter_rating & filter_selling & filter_stock
+    return result
 
 
 def __clean_title(product: dict) -> str:
@@ -86,8 +90,9 @@ def __parse_response(filtered_products: list, keyword: str = "") -> dict:
     is_uploads = [False] * filtered_count
 
     tiktok_keywords = list(map(__generate_tit_kok_keywords, shop_names, titles))
+    print(f'\nGet Tiktok video for {len(tiktok_keywords)} items')
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        tiktok_videos = list(executor.map(get_tiktok_url, tiktok_keywords))
+        tiktok_videos = list(executor.map(lambda x: get_tiktok_url(x, not args.headed), tiktok_keywords))
     data = {
         C_IS_UPLOADED: is_uploads,
         C_KEYWORD: keywords,
@@ -113,33 +118,53 @@ def __parse_response(filtered_products: list, keyword: str = "") -> dict:
     return data
 
 
+def get_limits(total_limit):
+    limits = []
+    while total_limit >= 50:
+        limits.append(50)
+        total_limit -= 50
+    if total_limit > 0:
+        limits.append(total_limit)
+    return limits if len(limits) > 0 else [0]
+
+
 def __search_products(keyword_limit: dict) -> dict:
     keyword = keyword_limit['keyword']
     limit = keyword_limit['limit']
     print(f"Searching for {keyword}")
 
-    url = f"{affiliate_base_url}/offer/product/list"
-    querystring = {"keyword": keyword, "list_type": 0, "match_type": 1, "sort_type": 2, "page_offset": 0,
-                   "page_limit": limit, "client_type": 1, "filter_types": 2, "filter_shop_types": 1}
-
-    response = session.request("GET", url, cookies=affiliate_cookies, headers=affiliate_headers,
-                               params=querystring).json()
     products = []
-    try:
-        products = response['data']['list']
-    except Exception:
-        pass
+    for i, page_limit in enumerate(get_limits(limit)):
+        page_offset = i * 50
+        url = f"{affiliate_base_url}/offer/product/list"
+        # sort by commission
+        # filter by Extra Commission
+        querystring = {"keyword": keyword, "list_type": 0, "match_type": 1, "sort_type": 5, "page_offset": page_offset,
+                       "page_limit": page_limit, "client_type": 1, "filter_types": 2, "filter_shop_types": 1}
+        response = requests.request("GET", url, cookies=affiliate_cookies, headers=affiliate_headers,
+                                    params=querystring).json()
+        try:
+            datas = response['data']['list']
+            print(f'Response {keyword} Page {i + 1}: {len(datas)}')
+            products += datas
+        except Exception as e:
+            print(f'Error {keyword}: Page {i + 1}')
+            print(e)
+            break
 
+    print(f'Total Products: {len(products)}\n')
     if len(products) <= 0:
-        print(response)
-    filtered_products = list(filter(__filter_product, products))
+        print('Get 0 Result\n')
+        exit(1)
 
+    filtered_products = list(filter(__filter_product, products))
     if len(filtered_products) <= 0:
         print("No data match the filters")
         return {}
     else:
         print(f"Retrieved {len(filtered_products)} items for {keyword}")
-        return __parse_response(filtered_products, keyword)
+        final_products = filtered_products[:1] if args.headed else filtered_products
+        return __parse_response(final_products, keyword)
 
 
 # noinspection PyUnresolvedReferences
@@ -168,9 +193,9 @@ def search(keywords: list, limit: int):
         __save_csv(single_result)
 
     else:
-        args = list(map(lambda q: dict({'keyword': q, 'limit': limit}), keywords))
+        keywords_n_limits = list(map(lambda q: dict({'keyword': q, 'limit': limit}), keywords))
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            results = list(executor.map(__search_products, args))
+            results = list(executor.map(__search_products, keywords_n_limits))
 
         merged = {}
         for d in results:
@@ -182,14 +207,20 @@ def search(keywords: list, limit: int):
 
 
 def main():
-    args = __get_args()
     s_keywords = args.keywords
-    s_limit = args.limit
+    i_limit = args.limit
     parsed_keys = s_keywords.replace('-', ' ')
     keys: list = parsed_keys.split(',')
-    search(keys, s_limit)
+    search(keys, i_limit)
 
 
 if __name__ == '__main__':
+    args = __get_args()
+    proxy_ip = '109.92.133.194:5678'
+    proxies = {
+        'http': f'http://{proxy_ip}',
+        'https': f'https://{proxy_ip}'
+    }
     session = requests.Session()
+    # session.proxies = proxies
     main()
