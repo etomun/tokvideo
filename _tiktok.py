@@ -1,12 +1,12 @@
 import argparse
 import contextlib
-import json
 import time
+import urllib.parse
 from argparse import Namespace
 from os import makedirs
 
 from parsel import Selector
-from playwright.sync_api import sync_playwright, Page
+from playwright.sync_api import sync_playwright, Page, expect
 
 
 def __get_args() -> Namespace:
@@ -33,36 +33,44 @@ def __login():
         page.fill('input[name=username]', username)
         page.fill('input[type=password]', pwd)
         page.get_by_label("Log in").get_by_role("button", name="Log in").click()
-        # Manual captcha
-        time.sleep(15)
-        print("Login Succeed")
 
-        auth_dir = 'data/auth'
-        makedirs(auth_dir, exist_ok=True)
-        with open(f"{auth_dir}/tiktok_cookies.json", "w") as f:
-            f.write(json.dumps(context.cookies()))
+        time.sleep(3)
+        try:
+            page.locator(".captcha_verify_bar").is_visible()
+            time.sleep(17)
+        except Exception as e:
+            print(e)
+            pass
 
-        context.close()
+        try:
+            expect(page.locator('#header-more-menu-icon')).to_be_visible()
+            auth_dir = 'data/auth'
+            makedirs(auth_dir, exist_ok=True)
+            context.storage_state(path=f"{auth_dir}/tiktok_session_{username}.json")
+            print('Login Success')
+        except Exception as e:
+            print(e)
+            print('Login Failed')
+
         browser.close()
 
 
 @contextlib.contextmanager
 def __tiktok_page(headless: bool = True) -> tuple[Page]:
     with sync_playwright() as playwright:
-        context = playwright.chromium.launch(headless=headless).new_context()
+        browser = playwright.chromium.launch(headless=headless)
         try:
-            with open("data/auth/tiktok_cookies.json", "r") as f:
-                cookies = json.loads(f.read())
-                context.add_cookies(cookies)
-        except FileNotFoundError:
-            pass
-        yield context.new_page()
-        context.close()
+            context = browser.new_context(storage_state=f"data/auth/tiktok_session_ware.stock.json")
+            yield context.new_page()
+        except Exception as e:
+            print(e)
+            yield browser.new_context().new_page()
 
 
-def get_tiktok_url(keyword: str, is_headless: bool = True) -> str:
+def get_tiktok_link(keyword: str, is_headless: bool = True) -> str:
+    encoded_keywords = urllib.parse.quote(keyword)
     with __tiktok_page(headless=is_headless) as (page):
-        page.goto(f"https://www.tiktok.com/search/video?q={keyword} #howto")
+        page.goto(f"https://www.tiktok.com/search/video?q={encoded_keywords}")
 
         # HEADED (headless=False) for captcha):
         if not is_headless:
@@ -70,7 +78,7 @@ def get_tiktok_url(keyword: str, is_headless: bool = True) -> str:
 
         if is_headless and page.locator('div[id=tiktok-verify-ele]').count() > 0:
             print('Captcha Detected')
-            exit(0)
+            exit(1)
         else:
             time.sleep(3)
             list_video = page.wait_for_selector('div[id=tabs-0-panel-search_video]', timeout=10 * 1000)
@@ -86,17 +94,5 @@ def get_tiktok_url(keyword: str, is_headless: bool = True) -> str:
             # return links
 
 
-def _get_cookies():
-    try:
-        with open("data/auth/affiliate_cookies.json", "r") as f:
-            cookies = json.loads(f.read())
-            return {c["name"]: c["value"] for c in cookies}
-
-    except FileNotFoundError:
-        pass
-
-
 if __name__ == '__main__':
-    # print(_get_cookies())
-    # print(get_tiktok_url('Koch'))
     __login()

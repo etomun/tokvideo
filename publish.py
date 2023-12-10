@@ -2,12 +2,9 @@ import argparse
 import os
 import random
 import re
-import time
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlparse
 
-import numpy as np
-import pandas as pd
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
 from appium.webdriver.common.appiumby import AppiumBy as By
@@ -16,63 +13,47 @@ from pandas.core.groupby import DataFrameGroupBy
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
 
-import _shopee
-from __table import C_LINK, C_TIKTOK_V, C_IS_UPLOADED, C_STOCK, C_TIKTOK_K, C_EST_COMM, C_TITLE
+from __table import C_LINK, C_TIKTOK_V, C_EST_COMM, C_TITLE, C_HASHTAGS, C_SHOP_NAME
+from _shopee import set_fav_product
 from _ssstik import download_tiktok
+from util import delete_file, set_entry_uploaded, get_single_datas, get_grouped_datas
 
 
-def __set_favorite_product(product_link: str, like: bool) -> bool:
-    shop_id, product_id = PurePosixPath(unquote(urlparse(product_link).path)).parts[-2:]
-    print(f'\nPerform curl to set favorite {like} to {product_link}')
-    return _shopee.set_fav_product(like, shop_id, product_id)
-
-
-def __push_to_remote_device(file: str) -> bool:
+def __push_to_remote_device(file: str, album_name: str) -> bool:
     try:
         file_name = PurePosixPath(unquote(urlparse(file).path)).parts[-1:][0]
-        os.system(f"adb push {file} {adb_videos_dir}{file_name}")
-        os.system(
-            f"adb shell \"am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://{adb_videos_dir}\"")
-        print(f"Video pushed to {adb_videos_dir}{file_name}")
+        remote_file = f'{adb_videos_dir}/{album_name}/{file_name}'
+        os.system(f'adb push {file} {remote_file}')
+        os.system(f'adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://{remote_file}')
+        print(f"Video pushed to {remote_file}")
         return True
     except Exception as e:
         print(e)
         return False
 
 
-def __remove_from_remote_device(video_file: str) -> bool:
-    file_name = PurePosixPath(unquote(urlparse(video_file).path)).parts[-1:][0]
+def __remove_from_remote_device(video_file: str, album_name: str) -> bool:
     try:
-        os.system(f"adb shell rm {adb_videos_dir}{file_name}")
-        os.system(
-            f"adb shell \"am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://{adb_videos_dir}\"")
-        print(f"Video deleted from {adb_videos_dir}{file_name}")
+        file_name = PurePosixPath(unquote(urlparse(video_file).path)).parts[-1:][0]
+        remote_file = f'{adb_videos_dir}/{album_name}/{file_name}'
+        os.system(f'adb shell rm {remote_file}')
+        os.system(f'adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://{remote_file}')
+        print(f'Video deleted from {remote_file}')
         return True
     except Exception as e:
         print(e)
-        return False
-
-
-def __set_entry_uploaded(index: int) -> bool:
-    try:
-        if Path(df_file).exists():
-            df = pd.read_csv(df_file)
-            df.loc[index, C_IS_UPLOADED] = True
-            df.to_csv(df_file, index=False)
-            print(f'[{index + 2}] is uploaded (True)')
-            return True
-
-    except FileNotFoundError:
-        pass
         return False
 
 
 def __publish_video(video_file: str, caption: str, products: DataFrame):
-    print(f'\n READY TO UPLOAD: {video_file} -> {products[C_LINK]} {products[C_EST_COMM]}\n')
-    all_fav_true = all(__set_favorite_product(p[C_LINK], True) for i, p in products.iterrows())
-    if __push_to_remote_device(video_file) & all_fav_true:
+    print(f'\nReady to upload: {video_file}')
+    all_fav_true = all(set_fav_product(usr, p[C_LINK], True) for i, p in products.iterrows())
+    album_name = PurePosixPath(unquote(urlparse(video_file).path)).parts[-1:][0].split('.')[-2:][0]
+    if __push_to_remote_device(video_file, album_name) & all_fav_true:
         driver = webdriver.Remote(f"http://127.0.0.1:4723", options=options)
         wait = WebDriverWait(driver, 7)
+        print(f'\nUploading video for {len(products)} products...')
+        print(f'Make sure Shopee app is logged in for username: {usr}')
 
         # Element Locator Params
         path_profile = "//android.widget.LinearLayout[@resource-id=\"com.shopee.id:id/sp_bottom_tab_layout\"]/android.widget.FrameLayout[6]"
@@ -81,8 +62,6 @@ def __publish_video(video_file: str, caption: str, products: DataFrame):
         path_tab_posting = "//android.view.ViewGroup[@content-desc=\"click post tab\"]"
         path_post = "//android.view.ViewGroup[@content-desc=\"click to post video\"]"
         path_edit_continue_1 = "//android.widget.TextView[@text=\"Lanjutkan\"]"
-        # path_sound_effect = "//android.widget.LinearLayout[@resource-id=\"com.shopee.id:id/ll_top_right_menu\"]/android.widget.LinearLayout[2]"
-        # path_sound_toddler = "(//android.widget.ImageView[@resource-id=\"com.shopee.id:id/iv_bottom_window_icon\"])[4]"
         path_affiliate_tab = "//android.widget.FrameLayout[@resource-id=\"android:id/content\"]/android.widget.FrameLayout/android.widget.FrameLayout/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[4]/android.view.ViewGroup[2]/android.view.ViewGroup/android.view.ViewGroup[5]"
         path_fav_tab = "//android.widget.ScrollView/android.view.ViewGroup/android.view.ViewGroup[1]/android.view.ViewGroup[2]/android.view.ViewGroup/android.widget.HorizontalScrollView/android.view.ViewGroup/android.view.ViewGroup[3]/android.view.ViewGroup"
         path_done_add_product = "//android.widget.FrameLayout[@resource-id=\"android:id/content\"]/android.widget.FrameLayout/android.widget.FrameLayout/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup[2]"
@@ -108,17 +87,13 @@ def __publish_video(video_file: str, caption: str, products: DataFrame):
             wait.until(ec.presence_of_all_elements_located((By.ID, "com.shopee.id:id/rv_folder")))
             album_locator = By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("{}")'.format(album_name)
             while not driver.find_elements(*album_locator):
-                driver.swipe(center_x, bottom_y * 0.8, center_x, bottom_y * 0.2, 100)
+                driver.swipe(center_x, bottom_y * 0.8, center_x, bottom_y * 0.2, 70)
             driver.find_element(*album_locator).click()
             videos = wait.until(ec.presence_of_all_elements_located((By.ID, "com.shopee.id:id/iv_picture")))
             videos[0].click()
 
             # Start Posting
             wait.until(ec.visibility_of_element_located((By.XPATH, path_edit_continue_1))).click()
-            # Toddle sound effect
-            # wait.until(ec.visibility_of_element_located((By.XPATH, path_sound_effect))).click()
-            # wait.until(ec.visibility_of_element_located((By.XPATH, path_sound_toddler))).click()
-            # wait.until(ec.visibility_of_element_located((By.ID, "com.shopee.id:id/player_container"))).click()
             wait.until(ec.visibility_of_element_located((By.ID, "com.shopee.id:id/tv_compress"))).click()
 
             # Caption
@@ -136,16 +111,26 @@ def __publish_video(video_file: str, caption: str, products: DataFrame):
 
                 add_id = id_attach_product if i == 0 else id_add_more_product
                 wait.until(ec.visibility_of_element_located((By.ID, add_id))).click()
-                wait.until(ec.visibility_of_element_located((By.XPATH, path_affiliate_tab))).click()
+
+                for _ in range(3):
+                    try:
+                        wait.until(ec.visibility_of_element_located((By.XPATH, path_affiliate_tab))).click()
+                        break
+                    except Exception as e:
+                        print(e)
+                        driver.press_keycode(4)
+                        wait.until(ec.visibility_of_element_located((By.ID, add_id))).click()
+                        pass
+
                 wait.until(ec.visibility_of_element_located((By.XPATH, path_fav_tab))).click()
                 btn_add_locator = By.ANDROID_UIAUTOMATOR, 'new UiSelector().text(\"Tambah\")'
                 found_btn = False
                 n_scroll = 0
-                while not found_btn and n_scroll <= 3:
+                while not found_btn and n_scroll <= len(products):
                     if driver.find_elements(*btn_add_locator):
                         found_btn = True
                     else:
-                        driver.swipe(center_x, bottom_y * 0.7, center_x, bottom_y * 0.3, 100)
+                        driver.swipe(center_x, bottom_y * 0.7, center_x, bottom_y * 0.3, 300)
                         n_scroll += 1
 
                 if found_btn:
@@ -164,25 +149,26 @@ def __publish_video(video_file: str, caption: str, products: DataFrame):
 
             # Succeed
             for i in products.index:
-                __set_entry_uploaded(i)
+                set_entry_uploaded(i, usr)
 
             uploaded_tiktok.append(f'{video_file} -- {products}')
+            delete_file(video_file)
             print(f'\n\n((( Video Saved to Draft ))) {video_file} for {len(products)} products \n\n')
 
         except Exception as e:
             # Only remove video for unpublished draft
-            __remove_from_remote_device(video_file)
+            __remove_from_remote_device(video_file, album_name)
             print(e)
 
         finally:
             # No longer needed to remove video from device since it still used for Draft feature
             # __remove_from_remote_device(video_file)
 
-            all(__set_favorite_product(p[C_LINK], False) for i, p in products.iterrows())
+            all(set_fav_product(usr, p[C_LINK], False) for i, p in products.iterrows())
             driver.quit()
             print('-----------------------------------------------------------------------------------------------\n\n')
     else:
-        all(__set_favorite_product(p[C_LINK], False) for i, p in products.iterrows())
+        all(set_fav_product(usr, p[C_LINK], False) for i, p in products.iterrows())
 
 
 def __first_n_words(words: str):
@@ -190,31 +176,12 @@ def __first_n_words(words: str):
     return ' '.join(words[:3])
 
 
-def _get_random_entries(limit: int = 0) -> DataFrameGroupBy:
-    if Path(df_file).exists():
-        df = pd.read_csv(df_file)
-        # get uploaded False and stock > 1
-        filtered = df[(df[C_IS_UPLOADED] == False) & (df[C_STOCK] > 1)]
-        # only take group that has > 2 rows
-        filtered_len = filtered.groupby(df[C_TIKTOK_V]).filter(lambda x: len(x) > 2)
-        grouped = filtered_len.groupby(df[C_TIKTOK_V])
-
-        # Limit Group by Request
-        if 0 < limit < len(grouped):
-            group_limit = min(limit, len(grouped))
-            random_names = np.random.choice(list(grouped.groups.keys()), group_limit, replace=False)
-            selected_groups = [grouped.get_group(group_name) for group_name in random_names]
-            return pd.concat(selected_groups).groupby(df[C_TIKTOK_V])
-        else:
-            return grouped
-
-
 def _non_empty_file(file) -> bool:
     path = Path(file)
     return path.stat().st_size > 0 if path.is_file() is not None else False
 
 
-def generate_hashtags() -> str:
+def shuffle_hashtags() -> str:
     hashtags = '#RacunShopee #ViralDiShopeeVideo #BadaiTapiBudget #SultanShopeeVideo'.split()
     random.shuffle(hashtags)
     return ' '.join(hashtags)
@@ -223,19 +190,18 @@ def generate_hashtags() -> str:
 def process_data(datas: DataFrameGroupBy):
     uploaded_tiktok.clear()
     for tiktok_url, rows in datas:
-        # take max 5 products to attach, the rest will not be published
-        filtered_df = rows.sort_values(by=C_EST_COMM).head(5)
+        # take max 6 products to attach, the rest will not be published
+        filtered_df = rows.sort_values(by=C_EST_COMM).tail(6)
 
-        first = filtered_df.iloc[0]
-        tiktok_keyword = first[C_TIKTOK_K]
-        title = first[C_TITLE]
-        brand_hashtag = str(tiktok_keyword).split()[0]
+        # take the last row to get the highest commission
+        last = filtered_df.iloc[-1].fillna('')
 
-        hashtags = f'#{brand_hashtag} {generate_hashtags()}'
+        title = last[C_TITLE]
+        product_hashtags = f'#{(last[C_SHOP_NAME].split()[0])} {last[C_HASHTAGS]}'
+        hashtags = f'{product_hashtags} {shuffle_hashtags()}'
         remaining_len = 149 - len(hashtags)
-
-        desc = title[:remaining_len] if len(title) >= remaining_len else title
-        caption = f"{desc} {hashtags}"
+        title_len = min(len(title), remaining_len)
+        caption = f"{title[:title_len]} {hashtags}"
 
         tiktok_video = download_tiktok(str(tiktok_url))
         if _non_empty_file(tiktok_video):
@@ -246,15 +212,13 @@ def process_data(datas: DataFrameGroupBy):
             print(
                 '-------------------------------------------------------------------------------------------\n\n')
     print(f'\nTOTAL UPLOADED: {len(uploaded_tiktok)}')
+    print(f'TOTAL CANCELLED: {len(datas) - len(uploaded_tiktok)}')
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", "-l", help="Limit the video count to upload", type=int, default=0)
-    args = parser.parse_args()
-    limit = args.limit
-
-    datas = _get_random_entries(limit)
+    count = args.count
+    is_single = args.single
+    datas = get_single_datas(usr, C_TIKTOK_V, count) if is_single else get_grouped_datas(usr, C_TIKTOK_V, count)
     if len(datas) <= 0:
         print('No available data. Run collect.py to get more data.')
     else:
@@ -262,14 +226,15 @@ def main():
 
 
 if __name__ == '__main__':
-    uploaded_tiktok = []
-
-    # Project File
-    df_file = 'data/scrap/products.csv'
+    parser = argparse.ArgumentParser()
+    parser.add_argument("username", help="Shopee username", type=str)
+    parser.add_argument("count", help="Limit the video count to upload", type=int, default=1)
+    parser.add_argument("--single", "-s", action="store_true", help="Upload with single product", default=False)
+    args = parser.parse_args()
+    usr = args.username
 
     # Remote File
-    album_name = '_tiktok_videos'
-    adb_videos_dir = f'/sdcard/{album_name}/'
+    adb_videos_dir = '/sdcard/_tiktok_videos'
 
     # Appium
     capabilities = {
@@ -283,4 +248,7 @@ if __name__ == '__main__':
         "appium:disableWindowAnimation": True
     }
     options = UiAutomator2Options().load_capabilities(capabilities)
+
+    uploaded_tiktok = []
+
     main()

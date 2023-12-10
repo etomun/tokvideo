@@ -1,23 +1,23 @@
 import argparse
 import concurrent.futures.thread
-import os
 import re
 from argparse import Namespace
-from pathlib import Path
 
-import pandas as pd
 import requests
 
-from __api import affiliate_cookies, affiliate_headers, affiliate_base_url
 from __table import *
-from _tiktok import get_tiktok_url
+from _shopee import get_product_offers
+from _tiktok import get_tiktok_link
+from util import save_products
 
 
 def __get_args() -> Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument("username", help="Shopee username")
     parser.add_argument("--keywords", "-k", help="White space not accepted, replace with -. Separate keys with ,",
                         type=str, default="")
     parser.add_argument("--limit", "-l", help="limit the offers results", type=int, default=50)
+    parser.add_argument("--hashtags", "-t", help="additional hashtags for tiktok", type=str, default='')
     parser.add_argument("--headed", "-ht", action="store_true", help="Enable headed tiktok for captcha", default=False)
     return parser.parse_args()
 
@@ -53,8 +53,13 @@ def __clean_title(product: dict) -> str:
 
 
 def __get_shop_video(product: dict) -> str:
-    videos = product['batch_item_for_item_card_full']['video_info_list']
-    return '' if len(videos) <= 0 else videos[0]['default_format']['url']
+    try:
+        videos = product['batch_item_for_item_card_full']['video_info_list']
+        result = '' if len(videos) <= 0 else videos[0]['default_format']['url']
+    except Exception as e:
+        print(e)
+        result = ''
+    return result
 
 
 def __generate_tit_kok_keywords(shop_name: str, product_title: str) -> str:
@@ -68,9 +73,8 @@ def __int(str_val: str) -> int:
     return int(re.sub(r"\D", "", str_val))
 
 
-def __parse_response(filtered_products: list, keyword: str = "") -> dict:
+def __parse_response(filtered_products: list, keyword: str = "", hashtags: str = '') -> dict:
     filtered_count = len(filtered_products)
-
     product_ids = list(map(lambda p: p['item_id'], filtered_products))
     titles = list(map(__clean_title, filtered_products))
     shop_ids = list(map(lambda p: p['batch_item_for_item_card_full']['shopid'], filtered_products))
@@ -88,17 +92,19 @@ def __parse_response(filtered_products: list, keyword: str = "") -> dict:
     est_commissions = [r * p * 0.01 for r, p in zip(seller_rates, prices)]
     keywords = [keyword] * filtered_count
     is_uploads = [False] * filtered_count
-
     tiktok_keywords = list(map(__generate_tit_kok_keywords, shop_names, titles))
+    additional_hashtags = [hashtags] * filtered_count
+
     print(f'\nGet Tiktok video for {len(tiktok_keywords)} items')
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        tiktok_videos = list(executor.map(lambda x: get_tiktok_url(x, not args.headed), tiktok_keywords))
+        tok_videos = list(executor.map(lambda q: get_tiktok_link(q, not args.headed), tiktok_keywords))
     data = {
         C_IS_UPLOADED: is_uploads,
         C_KEYWORD: keywords,
+        C_HASHTAGS: additional_hashtags,
         C_TIKTOK_K: tiktok_keywords,
         C_LINK: links,
-        C_TIKTOK_V: tiktok_videos,
+        C_TIKTOK_V: tok_videos,
         C_VIDEO: videos,
         C_TITLE: titles,
         C_SHOP_NAME: shop_names,
@@ -132,30 +138,9 @@ def __search_products(keyword_limit: dict) -> dict:
     keyword = keyword_limit['keyword']
     limit = keyword_limit['limit']
     print(f"Searching for {keyword}")
-
-    products = []
-    for i, page_limit in enumerate(get_limits(limit)):
-        page_offset = i * 50
-        url = f"{affiliate_base_url}/offer/product/list"
-        # sort by commission
-        # filter by Extra Commission
-        querystring = {"keyword": keyword, "list_type": 0, "match_type": 1, "sort_type": 5, "page_offset": page_offset,
-                       "page_limit": page_limit, "client_type": 1, "filter_types": 2, "filter_shop_types": 1}
-        response = requests.request("GET", url, cookies=affiliate_cookies, headers=affiliate_headers,
-                                    params=querystring).json()
-        try:
-            datas = response['data']['list']
-            print(f'Response {keyword} Page {i + 1}: {len(datas)}')
-            products += datas
-        except Exception as e:
-            print(f'Error {keyword}: Page {i + 1}')
-            print(e)
-            break
-
-    print(f'Total Products: {len(products)}\n')
+    products = get_product_offers(args.username, keyword, limit)
     if len(products) <= 0:
-        print('Get 0 Result\n')
-        exit(1)
+        return {}
 
     filtered_products = list(filter(__filter_product, products))
     if len(filtered_products) <= 0:
@@ -164,33 +149,14 @@ def __search_products(keyword_limit: dict) -> dict:
     else:
         print(f"Retrieved {len(filtered_products)} items for {keyword}")
         final_products = filtered_products[:1] if args.headed else filtered_products
-        return __parse_response(final_products, keyword)
+        hashtags = '#' + ' #'.join(word.replace('-', '') for word in args.hashtags.split(','))
+        return __parse_response(final_products, keyword, hashtags)
 
 
-# noinspection PyUnresolvedReferences
-def __save_csv(data: dict):
-    base_dir = "data/scrap"
-    full_path = base_dir + "/products.csv"
-    os.makedirs(base_dir, exist_ok=True)
-
-    df = pd.DataFrame.from_dict(data)
-    try:
-        if Path(full_path).exists():
-            existing = pd.read_csv(full_path)
-            if not existing.empty:
-                df = pd.concat([existing, df]).drop_duplicates(keep=False)
-    except FileNotFoundError:
-        pass
-    finally:
-        df = df.dropna(subset=[C_TIKTOK_V])
-        df.to_csv(full_path, index=False)
-        print(f'Current Entries: {len(df.index)} items')
-
-
-def search(keywords: list, limit: int):
+def collect_products(keywords: list, limit: int):
     if all(s == '' for s in keywords):
         single_result = __search_products({'keyword': '', 'limit': limit})
-        __save_csv(single_result)
+        save_products(single_result, args.username)
 
     else:
         keywords_n_limits = list(map(lambda q: dict({'keyword': q, 'limit': limit}), keywords))
@@ -203,7 +169,7 @@ def search(keywords: list, limit: int):
                 if k not in merged:
                     merged[k] = []
                 merged[k].extend(d[k])
-        __save_csv(merged)
+        save_products(merged, args.username)
 
 
 def main():
@@ -211,11 +177,12 @@ def main():
     i_limit = args.limit
     parsed_keys = s_keywords.replace('-', ' ')
     keys: list = parsed_keys.split(',')
-    search(keys, i_limit)
+    collect_products(keys, i_limit)
 
 
 if __name__ == '__main__':
     args = __get_args()
+
     proxy_ip = '109.92.133.194:5678'
     proxies = {
         'http': f'http://{proxy_ip}',

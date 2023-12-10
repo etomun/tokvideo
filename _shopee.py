@@ -1,20 +1,22 @@
 import argparse
 import json
 import subprocess
+import time
 from os import makedirs
+from pathlib import PurePosixPath
+from urllib.parse import unquote, urlparse
 
-from playwright.sync_api import sync_playwright
+import requests
+from playwright.sync_api import sync_playwright, expect
 
 
-def set_fav_product(is_fav: bool, shop_id: str, product_id: str) -> bool:
+def set_fav_product(usr: str, product_link: str, is_fav: bool) -> bool:
+    print(f'{usr} try to set favorite:{is_fav} to {product_link}')
+    shop_id, product_id = PurePosixPath(unquote(urlparse(product_link).path)).parts[-2:]
     endpoint = 'like_items' if is_fav else 'unlike_items'
-
-    # with open("data/auth/shopee_cookies.json", "r") as f:
-    #     json_cookies = json.loads(f.read())
-    #     cookies = "; ".join([f"{cookie['name']}={cookie['value']}" for cookie in json_cookies])
-
-    cookies = '__LOCALE__null=ID; csrftoken=bZ4aC5e1qrOzU0NJIHKgP7Xmpfm3Egg8; _fbp=fb.2.1671691525641.722325261; _tt_enable_cookie=1; _ttp=HA3wQHY3B2CtgbRVrph8LTlSuAo; _QPWSDCXHZQA=171a5039-0119-41eb-fceb-fc2fe0164fde; _fbc=fb.2.1672629331899.IwAR1LPjC1cr3R5AlQzkRBhMKQvQ4hjr6bNrmQT8tY9HRqCOT91qCa9N0LmCk; SPC_CLIENTID=UmFmV1U0N2x3YmxGvymyjxlcqjtzndzs; SPC_IA=1; __stripe_mid=938c8899-a191-4af3-b9c3-6cdbca6f4a7eba1d10; language=en; SPC_F=PotThYhfyczry0d8dc4LABk1KI85fFUV; REC_T_ID=d8b5a598-4deb-11ee-809f-f4ee08261793; _gcl_au=1.1.624132024.1696216583; _gcl_aw=GCL.1696906138.CjwKCAjwyY6pBhA9EiwAMzmfwRK__bb04KI6gb_9PJTZIwcow5Fvu_cwa_Li4bgGyxh1rmZYpD-qvBoCeG4QAvD_BwE; _gac_UA-61904553-8=1.1696906139.CjwKCAjwyY6pBhA9EiwAMzmfwRK__bb04KI6gb_9PJTZIwcow5Fvu_cwa_Li4bgGyxh1rmZYpD-qvBoCeG4QAvD_BwE; _ga_8TJ45E514C=GS1.1.1698424089.4.1.1698424729.60.0.0; SC_DFP=mXXvwSbOxnItOxaqBkCkvGiQMaDEXwbk; SPC_SC_SA_TK=; SPC_SC_SA_UD=; _med=affiliates; _sapid=fa8af575-4dfb-400e-8211-1ed4bf735d2a; SPC_SC_TK=604e11f8b6bcc1ec6fe5433bee0a2934; SPC_SC_UD=1098761675; SPC_STK=VOJrhoORw36Wu3gipUWKUym1UpQs7+uNcdz2JSABZkRjCIDveJbg9AP3etjljxB54GQrhbCSYeLtpE9BPh6CM9GeKBYTWFtqwK6yxTMdSHn30eulJGwSKdAi1bTdigWNRTZNNQboao2P0y70dqzGW9wNMf6LgFQrY1vXbxl8xO6uZBA02AK6ovFg6WHbdq82; _ga_QMX630BLLS=GS1.1.1701362631.4.0.1701362643.48.0.0; SPC_SEC_SI=v1-QkVNTXZRVGlzMDVhZ3NjRUQLQVgTtuDVi2HqVMBU1PuGOgJ1o5MgbqVTFBgd/2my5Rt7q/Zn0bn5lTbe3CgJer6f0irMV5wGxLO0QCTMocw=; SPC_SI=6mRoZQAAAABoNFFHdnpQYZyWPgIAAAAAWmlHcGxIOTM=; REC7iLP4Q=a477373d-daa9-4384-b48e-c4ead5b2ec13; _gid=GA1.3.429524072.1701854478; AMP_TOKEN=%24NOT_FOUND; _dc_gtm_UA-61904553-8=1; SPC_ST=.YTNlWXgwSWxjYklCQUFOMKosF7HsN1hdmZzCmK8hQaC89j9q/6DcBl2ARJzzVgbn8wH/+19Xz2NMVL/sckwdO1TxGBiVPl80tUH2mZXICloAdust29jWhsHKNfqXmomRgqPdjwdmXyU0g07TaSqDrE/MndR0+sVuB0DBaqnTJqkkzldEbf7zVVQFQXE28NWZOE8Pga/I5hTCnn+T9WwnGg==; SPC_U=1098761675; SPC_R_T_ID=Qma4E3LjUN6xYSz7MM0T7k2TD+rCDP4z8TkA2zl26kQJCA2STkczCG5/akJaO5lLFypox2X6XMGrLhFMu0RajnyX/hTVaUePP9vUFfTAWaiNvBtC7Db6EA6Msb5V3lvVkrV5DCFQCLlf0WeT6SKd9hN7CWJlq8js44hdeVKiZI0=; SPC_R_T_IV=Vk95ZzRlSnVWdnpYSGJJNg==; SPC_T_ID=Qma4E3LjUN6xYSz7MM0T7k2TD+rCDP4z8TkA2zl26kQJCA2STkczCG5/akJaO5lLFypox2X6XMGrLhFMu0RajnyX/hTVaUePP9vUFfTAWaiNvBtC7Db6EA6Msb5V3lvVkrV5DCFQCLlf0WeT6SKd9hN7CWJlq8js44hdeVKiZI0=; SPC_T_IV=Vk95ZzRlSnVWdnpYSGJJNg==; _ga=GA1.3.2066265449.1671691526; shopee_webUnique_ccd=%2BePslPx6GLaLgS2VvUKQaQ%3D%3D%7C4qdY3pcwnrkC6AUWme2%2FzyRFdMnYneyMk%2BqgBXQTFWVJnikYrJ3dpv9vvBHqcdCFD6bO2lteBg0%3D%7Ch1vBA0gFS5za0bBt%7C08%7C3; ds=93fb7fdca2ecbff886f5f68aa6c40e0a; SPC_EC=ajlSenNIWVRkVUhhSGVJWayZmiVNqbDevmcUijP176D66Lm8AyFmIhHdG8Bvwu+3sbyOXTiAaz4ih3ttL321gb/iz9yvh5QCUHcp06QfPXndgI/bvZNS8bVeOcLiN9ID4YUCX0FAJK0fNaK4xlEHiPOH8NFC5fYtSZVyGDracH8=; _ga_SW6D8G0HXK=GS1.1.1701865017.143.1.1701865217.32.0.0'
-
+    cookies_dic = _get_cookies(usr)
+    cookies_str = '; '.join([f'{key}={value}' for key, value in cookies_dic.items()])
+    cookies = f'__LOCALE__null=ID; {cookies_str}'
     curl_command = [
         'curl',
         '-X', 'POST',
@@ -24,7 +26,7 @@ def set_fav_product(is_fav: bool, shop_id: str, product_id: str) -> bool:
         '-H', 'accept-language: en-US,en;q=0.9',
         '-H', 'content-type: application/json',
 
-        '-H', 'if-none-match-: 55b03-ea8c9f1ba75cb000a410ab50e9378bcc',
+        # '-H', 'if-none-match-: 55b03-ea8c9f1ba75cb000a410ab50e9378bcc',
         '-H', 'origin: https://shopee.co.id',
         '-H', 'priority: u=1, i',
         '-H', 'referer: https://shopee.co.id',
@@ -67,6 +69,88 @@ def set_fav_product(is_fav: bool, shop_id: str, product_id: str) -> bool:
         return False
 
 
+def get_limits(total_limit):
+    limits = []
+    while total_limit >= 50:
+        limits.append(50)
+        total_limit -= 50
+    if total_limit > 0:
+        limits.append(total_limit)
+    return limits if len(limits) > 0 else [0]
+
+
+def get_product_offers(usr: str, keyword: str, limit: int) -> list:
+    url = f"https://affiliate.shopee.co.id/api/v3/offer/product/list"
+    products = []
+    for i, page_limit in enumerate(get_limits(limit)):
+        page_offset = i * 50
+
+        # sort by commission
+        # filter by Extra Commission
+        querystring = {"keyword": keyword, "list_type": 0, "match_type": 1, "sort_type": 5, "page_offset": page_offset,
+                       "page_limit": page_limit, "client_type": 1, "filter_types": 2, "filter_shop_types": 1}
+        response = requests.request("GET", url,
+                                    cookies=_get_cookies(usr),
+                                    headers=_affiliate_headers(usr),
+                                    params=querystring).json()
+        try:
+            datas = response['data']['list']
+            print(f'Response {keyword} Page {i + 1}: {len(datas)}')
+            products += datas
+        except Exception as e:
+            print(f'Error {keyword} Page {i + 1}: {e}')
+            print(response)
+            break
+
+    print(f'Total Products: {len(products)}\n')
+    if len(products) <= 0:
+        print('Get no offer\n')
+    return products
+
+
+def _get_cookies(usr: str) -> dict:
+    try:
+        with open(f"data/auth/shop_ee_session_{usr}.json", "r") as f:
+            session = json.loads(f.read())
+            cookies = session['cookies']
+            return {c['name']: c['value'] for c in cookies}
+    except FileNotFoundError:
+        print(f"Cookies not found for {usr}. Please LOGIN first.")
+        return {}
+        pass
+
+
+def _affiliate_headers(usr: str) -> dict:
+    return {
+        'authority': 'affiliate.shopee.co.id',
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'en-US,en;q=0.9',
+        'affiliate-program-type': '1',
+        'csrf-token': _get_crf_token(usr),
+        'referer': 'https://affiliate.shopee.co.id/offer/product_offer',
+        'sec-ch-ua': '"Chromium";v="119", "Not?A_Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    }
+
+
+def _get_crf_token(usr: str) -> str:
+    try:
+        with open(f"data/auth/shop_ee_session_{usr}.json", "r") as f:
+            session = json.loads(f.read())
+            cookies = session['cookies']
+            token_cookie = next(c for c in cookies if c['name'] == 'csrftoken')
+            return token_cookie['value']
+
+    except FileNotFoundError:
+        print(f"Cookies not found for {usr}. Please LOGIN first.")
+        return ''
+
+
 def _login():
     parser = argparse.ArgumentParser()
     parser.add_argument('usr')
@@ -84,14 +168,24 @@ def _login():
         page.fill('input[name=password]', pwd)
         page.get_by_role("button", name="Log in").click()
 
-        # Manual captcha
-        # time.sleep(15)
+        time.sleep(3)
+        try:
+            page.wait_for_url(url='https://shopee.co.id/verify/ivs?is_initial=true')
+            time.sleep(60)
+        except Exception as e:
+            print(e)
+            pass
 
-        auth_dir = 'data/auth'
-        makedirs(auth_dir, exist_ok=True)
-        with open(f"{auth_dir}/shopee_cookies.json", "w") as f:
-            f.write(json.dumps(context.cookies()))
-            print("Login Succeed")
+        try:
+            expect(page.get_by_role("link", name="notifikasi")).to_be_visible()
+            auth_dir = 'data/auth'
+            makedirs(auth_dir, exist_ok=True)
+            context.storage_state(path=f"{auth_dir}/shop_ee_session_{usr}.json")
+
+            print('Login Success')
+        except Exception as e:
+            print(e)
+            print('Login Failed')
 
         browser.close()
 
