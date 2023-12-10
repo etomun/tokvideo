@@ -19,16 +19,21 @@ def save_products(data: dict, usr: str):
     full_path = f"{base_dir}/products_{usr}.csv"
     os.makedirs(base_dir, exist_ok=True)
     df = pd.DataFrame.from_dict(data)
+    print(f'New dataframe: {len(df)}')
     try:
         if Path(full_path).exists():
             existing = pd.read_csv(full_path)
             if not existing.empty:
-                df = pd.concat([existing, df]).drop_duplicates()
-    except FileNotFoundError:
+                df = pd.concat([existing, df])
+        print(f'After concat dataframe: {len(df)}')
+        df = df.dropna(subset=[C_TIKTOK_V])
+        print(f'After drop empty Tiktok dataframe: {len(df)}')
+        df = df.drop_duplicates()
+        print(f'Final dataframe: {len(df)}')
+    except Exception as e:
+        print(e)
         pass
     finally:
-        df.to_csv(full_path, index=False)
-        df = df.dropna(subset=[C_TIKTOK_V])
         df.to_csv(full_path, index=False)
         print(f'Current Entries: {len(df.index)} items')
 
