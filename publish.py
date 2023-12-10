@@ -13,9 +13,9 @@ from pandas.core.groupby import DataFrameGroupBy
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
 
-from __table import C_LINK, C_TIKTOK_V, C_EST_COMM, C_TITLE, C_HASHTAGS, C_SHOP_NAME
+from __table import C_LINK, C_TIKTOK_V, C_EST_COMM, C_TITLE, C_HASHTAGS, C_SHOP_NAME, C_VIDEO
 from _shopee import set_fav_product
-from _ssstik import download_tiktok
+from _ssstik import download_tiktok, download_shop_video
 from util import delete_file, set_entry_uploaded, get_single_datas, get_grouped_datas
 
 
@@ -151,7 +151,7 @@ def __publish_video(video_file: str, caption: str, products: DataFrame):
             for i in products.index:
                 set_entry_uploaded(i, usr)
 
-            uploaded_tiktok.append(f'{video_file} -- {products}')
+            uploaded_videos.append(f'{video_file} -- {products}')
             delete_file(video_file)
             print(f'\n\n((( Video Saved to Draft ))) {video_file} for {len(products)} products \n\n')
 
@@ -187,9 +187,9 @@ def shuffle_hashtags() -> str:
     return ' '.join(hashtags)
 
 
-def process_data(datas: DataFrameGroupBy):
-    uploaded_tiktok.clear()
-    for tiktok_url, rows in datas:
+def process_data(datas: DataFrameGroupBy, is_shop_video: bool = False):
+    uploaded_videos.clear()
+    for video_url, rows in datas:
         # take max 6 products to attach, the rest will not be published
         filtered_df = rows.sort_values(by=C_EST_COMM).tail(6)
 
@@ -203,26 +203,33 @@ def process_data(datas: DataFrameGroupBy):
         title_len = min(len(title), remaining_len)
         caption = f"{title[:title_len]} {hashtags}"
 
-        tiktok_video = download_tiktok(str(tiktok_url))
-        if _non_empty_file(tiktok_video):
-            __publish_video(tiktok_video, caption, filtered_df)
+        video = download_shop_video(str(video_url)) if is_shop_video else download_tiktok(str(video_url))
+        if _non_empty_file(video):
+            __publish_video(video, caption, filtered_df)
         else:
             indexes = rows.index
-            print(f'Cant upload video: {indexes} {tiktok_video}\n')
-            print(
-                '-------------------------------------------------------------------------------------------\n\n')
-    print(f'\nTOTAL UPLOADED: {len(uploaded_tiktok)}')
-    print(f'TOTAL CANCELLED: {len(datas) - len(uploaded_tiktok)}')
+            print(f'Cant upload video: {indexes} {video}\n')
+            print('-----------------------------------------------------------------------------------------\n')
+    print(f'Total Uploaded: {len(uploaded_videos)}')
+    print(f'Total Cancelled: {len(datas) - len(uploaded_videos)}\n')
+    print('-----------------------------------------------------------------------------------------\n')
 
 
 def main():
     count = args.count
     is_single = args.single
-    datas = get_single_datas(usr, C_TIKTOK_V, count) if is_single else get_grouped_datas(usr, C_TIKTOK_V, count)
-    if len(datas) <= 0:
+    t_datas = get_single_datas(usr, C_TIKTOK_V, count) if is_single else get_grouped_datas(usr, C_TIKTOK_V, count)
+    s_datas = get_single_datas(usr, C_VIDEO, count) if is_single else get_grouped_datas(usr, C_VIDEO, count)
+
+    if len(t_datas) <= 0:
         print('No available data. Run collect.py to get more data.')
     else:
-        process_data(datas)
+        process_data(t_datas)
+
+    if len(s_datas) <= 0:
+        print('No available data. Run collect.py to get more data.')
+    else:
+        process_data(s_datas, True)
 
 
 if __name__ == '__main__':
@@ -234,7 +241,7 @@ if __name__ == '__main__':
     usr = args.username
 
     # Remote File
-    adb_videos_dir = '/sdcard/_tiktok_videos'
+    adb_videos_dir = '/sdcard/_affiliate_videos'
 
     # Appium
     capabilities = {
@@ -249,6 +256,6 @@ if __name__ == '__main__':
     }
     options = UiAutomator2Options().load_capabilities(capabilities)
 
-    uploaded_tiktok = []
+    uploaded_videos = []
 
     main()

@@ -52,42 +52,24 @@ def get_old_video(video_url: str, shop_url: str) -> str:
         return ""
 
 
-def download_shop_ee_video(video_url: str, shop_url: str) -> str:
+def download_shop_video(video_url: str) -> str:
     video_id = PurePosixPath(unquote(urlparse(video_url).path)).parts[-1:][0]
-    shop_path, product_path = PurePosixPath(unquote(urlparse(shop_url).path)).parts[-2:]
-    file_dir = f'data/videos/{shop_path}/{product_path}'
+    file_dir = f'data/videos/shop'
     file = f'{file_dir}/{video_id}'
     makedirs(file_dir, exist_ok=True)
 
-    with requests.get(video_url, stream=True) as r:
-        with open(file, 'wb') as f:
-            r.raw.decode_content = True
-            shutil.copyfileobj(r.raw, f, length=8 * 1024)
-    size = os.path.getsize(file) / (1024 * 1024)
-    print(f'Shop*ee video downloaded {file} - {size}MB')
-    return file
-
-
-def download_tiktok_video(tiktok_url: str, shop_url: str) -> str:
-    __post_link(tiktok_url)
-    video_id = PurePosixPath(unquote(urlparse(tiktok_url).path)).parts[-1:][0]
-    shop_path, product_path = PurePosixPath(unquote(urlparse(shop_url).path)).parts[-2:]
-    url = f'https://tikcdn.io/ssstik/{video_id}'
-    file_dir = f'data/videos/{shop_path}/{product_path}'
-    file = f'{file_dir}/{video_id}.mp4'
-
-    if os.path.exists(file) and os.path.getsize(file) > 0:
+    file_existed = os.path.exists(file)
+    if file_existed and os.path.getsize(file) > 0:
         size = round(os.path.getsize(file) / (1024 * 1024))
-        print(f'Tiktok video already exists {file} - {size} MB')
+        print(f'Shop video already exists {file} - {size} MB')
         return file
     else:
-        makedirs(file_dir, exist_ok=True)
-        with requests.get(url, cookies=__cookies, headers=__headers, stream=True) as r:
+        with requests.get(video_url, stream=True) as r:
             with open(file, 'wb') as f:
                 r.raw.decode_content = True
                 shutil.copyfileobj(r.raw, f, length=8 * 1024)
-        size = round(os.path.getsize(file) / (1024 * 1024))
-        print(f'Tiktok video downloaded {file} - {size} MB')
+        size = os.path.getsize(file) / (1024 * 1024)
+        print(f'Shop*ee video downloaded {file} - {size}MB')
         return file
 
 

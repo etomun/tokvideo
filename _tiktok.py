@@ -65,6 +65,7 @@ def __tiktok_page(headless: bool = True) -> tuple[Page]:
         except Exception as e:
             print(e)
             yield browser.new_context().new_page()
+        browser.close()
 
 
 def get_tiktok_link(keyword: str, is_headless: bool = True) -> str:
@@ -80,7 +81,7 @@ def get_tiktok_link(keyword: str, is_headless: bool = True) -> str:
             print('Captcha Detected')
             exit(1)
         else:
-            time.sleep(3)
+            time.sleep(5)
             list_video = page.wait_for_selector('div[id=tabs-0-panel-search_video]', timeout=10 * 1000)
             return Selector(text=list_video.inner_html()).css('a').xpath('@href').get()
 
