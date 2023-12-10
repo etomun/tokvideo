@@ -188,7 +188,6 @@ def shuffle_hashtags() -> str:
 
 
 def process_data(datas: DataFrameGroupBy, is_shop_video: bool = False):
-    uploaded_videos.clear()
     for video_url, rows in datas:
         # take max 6 products to attach, the rest will not be published
         filtered_df = rows.sort_values(by=C_EST_COMM).tail(6)
@@ -210,9 +209,6 @@ def process_data(datas: DataFrameGroupBy, is_shop_video: bool = False):
             indexes = rows.index
             print(f'Cant upload video: {indexes} {video}\n')
             print('-----------------------------------------------------------------------------------------\n')
-    print(f'Total Uploaded: {len(uploaded_videos)}')
-    print(f'Total Cancelled: {len(datas) - len(uploaded_videos)}\n')
-    print('-----------------------------------------------------------------------------------------\n')
 
 
 def main():
@@ -220,6 +216,7 @@ def main():
     is_single = args.single
     t_datas = get_single_datas(usr, C_TIKTOK_V, count) if is_single else get_grouped_datas(usr, C_TIKTOK_V, count)
     s_datas = get_single_datas(usr, C_VIDEO, count) if is_single else get_grouped_datas(usr, C_VIDEO, count)
+    uploaded_videos.clear()
 
     if len(t_datas) <= 0:
         print('No available data. Run collect.py to get more data.')
@@ -230,6 +227,11 @@ def main():
         print('No available data. Run collect.py to get more data.')
     else:
         process_data(s_datas, True)
+
+    print('=========================================================================================\n')
+    print(f'Total Uploaded: {len(uploaded_videos)}')
+    print(f'Total Cancelled: {len(t_datas) + len(s_datas) - len(uploaded_videos)}\n')
+    print('=========================================================================================\n')
 
 
 if __name__ == '__main__':
