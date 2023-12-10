@@ -23,10 +23,11 @@ def save_products(data: dict, usr: str):
         if Path(full_path).exists():
             existing = pd.read_csv(full_path)
             if not existing.empty:
-                df = pd.concat([existing, df]).drop_duplicates(keep=False)
+                df = pd.concat([existing, df]).drop_duplicates()
     except FileNotFoundError:
         pass
     finally:
+        df.to_csv(full_path, index=False)
         df = df.dropna(subset=[C_TIKTOK_V])
         df.to_csv(full_path, index=False)
         print(f'Current Entries: {len(df.index)} items')
