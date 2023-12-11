@@ -2,10 +2,9 @@ import os
 
 
 def main():
-    tiktok_dir = '/sdcard/_affiliate_videos'
+    remote_dir = '/sdcard/_affiliate_videos'
     try:
-        os.system(f'adb shell rm -r {tiktok_dir}')
-        print('Remote videos cleared')
+        os.system(f'adb shell rm -r {remote_dir}')
     except Exception as e:
         print(e)
 

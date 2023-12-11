@@ -1,22 +1,17 @@
 import argparse
 import os
-import random
-import re
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlparse
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
 from appium.webdriver.common.appiumby import AppiumBy as By
-from pandas import DataFrame
-from pandas.core.groupby import DataFrameGroupBy
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
 
-from __table import C_LINK, C_TIKTOK_V, C_EST_COMM, C_TITLE, C_HASHTAGS, C_SHOP_NAME, C_VIDEO
 from _shopee import set_fav_product
-from _ssstik import download_tiktok, download_shop_video
-from util import delete_file, set_entry_uploaded, get_single_datas, get_grouped_datas
+from _ssstik import download_tiktok
+from util import delete_file
 
 
 def __push_to_remote_device(file: str, album_name: str) -> bool:
@@ -45,14 +40,13 @@ def __remove_from_remote_device(video_file: str, album_name: str) -> bool:
         return False
 
 
-def __publish_video(video_file: str, caption: str, products: DataFrame):
-    print(f'\nReady to upload: {video_file}')
-    all_fav_true = all(set_fav_product(usr, p[C_LINK], True) for i, p in products.iterrows())
-    album_name = PurePosixPath(unquote(urlparse(video_file).path)).parts[-1:][0].split('.')[-2:][0]
-    if __push_to_remote_device(video_file, album_name) & all_fav_true:
+def __publish_video(video_file: str, caption: str, product_links: list):
+    all_fav_true = all(set_fav_product(usr, link, True) for link in product_links)
+    album = PurePosixPath(unquote(urlparse(video_file).path)).parts[-1:][0].split('.')[-2:][0]
+    if __push_to_remote_device(video_file, album) & all_fav_true:
         driver = webdriver.Remote(f"http://127.0.0.1:4723", options=options)
         wait = WebDriverWait(driver, 7)
-        print(f'\nUploading video for {len(products)} products...')
+        print(f'\nUploading video for {len(product_links)} products...')
         print(f'Make sure Shopee app is logged in for username: {usr}')
 
         # Element Locator Params
@@ -85,7 +79,7 @@ def __publish_video(video_file: str, caption: str, products: DataFrame):
             bottom_y = rect['height']
 
             wait.until(ec.presence_of_all_elements_located((By.ID, "com.shopee.id:id/rv_folder")))
-            album_locator = By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("{}")'.format(album_name)
+            album_locator = By.ANDROID_UIAUTOMATOR, f'new UiSelector().text("{album}")'
             while not driver.find_elements(*album_locator):
                 driver.swipe(center_x, bottom_y * 0.8, center_x, bottom_y * 0.2, 70)
             driver.find_element(*album_locator).click()
@@ -104,8 +98,8 @@ def __publish_video(video_file: str, caption: str, products: DataFrame):
 
             # Loop attach products
             tagged_product = 0
-            total_product = len(products)
-            for i, link in enumerate(products):
+            total_product = len(product_links)
+            for i, link in enumerate(product_links):
                 if tagged_product >= total_product:
                     break
 
@@ -118,7 +112,7 @@ def __publish_video(video_file: str, caption: str, products: DataFrame):
                         break
                     except Exception as e:
                         print(e)
-                        driver.press_keycode(4)
+                        driver.back()
                         wait.until(ec.visibility_of_element_located((By.ID, add_id))).click()
                         pass
 
@@ -142,31 +136,18 @@ def __publish_video(video_file: str, caption: str, products: DataFrame):
                 ec.visibility_of_element_located((By.ID, "com.shopee.id.dfpluginshopee16:id/tv_drafts_box"))).click()
 
             # Succeed
-            for i in products.index:
-                set_entry_uploaded(i, usr)
-
-            uploaded_videos.append(f'{video_file} -- {products}')
             delete_file(video_file)
-            print(f'\n\n((( Video Saved to Draft ))) {video_file} for {len(products)} products \n\n')
+            print(f'\n\n((( Video Saved to Draft ))) {video_file} for {len(product_links)} products \n\n')
 
         except Exception as e:
-            # Only remove video for unpublished draft
-            __remove_from_remote_device(video_file, album_name)
+            __remove_from_remote_device(video_file, album)
             print(e)
 
         finally:
-            # No longer needed to remove video from device since it still used for Draft feature
-            # __remove_from_remote_device(video_file)
-
-            all(set_fav_product(usr, p[C_LINK], False) for i, p in products.iterrows())
+            all(set_fav_product(usr, link, False) for link in product_links)
             driver.quit()
     else:
-        all(set_fav_product(usr, p[C_LINK], False) for i, p in products.iterrows())
-
-
-def __first_n_words(words: str):
-    words = re.findall(r'\b\w+\b', words)
-    return ' '.join(words[:3])
+        all(set_fav_product(usr, link, False) for link in product_links)
 
 
 def _non_empty_file(file) -> bool:
@@ -174,64 +155,25 @@ def _non_empty_file(file) -> bool:
     return path.stat().st_size > 0 if path.is_file() is not None else False
 
 
-def shuffle_hashtags() -> str:
-    hashtags = '#RacunShopee #ViralDiShopeeVideo #BadaiTapiBudget #SultanShopeeVideo'.split()
-    random.shuffle(hashtags)
-    return ' '.join(hashtags)
-
-
-def process_data(datas: DataFrameGroupBy, is_shop_video: bool = False):
-    for video_url, rows in datas:
-        # take max 6 products to attach, the rest will not be published
-        filtered_df = rows.sort_values(by=C_EST_COMM).tail(6)
-
-        # take the last row to get the highest commission
-        last = filtered_df.iloc[-1].fillna('')
-
-        title = last[C_TITLE]
-        product_hashtags = f'#{(last[C_SHOP_NAME].split()[0])} {last[C_HASHTAGS]}'
-        hashtags = f'{product_hashtags} {shuffle_hashtags()}'
-        remaining_len = 149 - len(hashtags)
-        title_len = min(len(title), remaining_len)
-        caption = f"{title[:title_len]} {hashtags}"
-
-        video = download_shop_video(str(video_url)) if is_shop_video else download_tiktok(str(video_url))
-        if _non_empty_file(video):
-            __publish_video(video, caption, filtered_df)
-        else:
-            indexes = rows.index
-            print(f'Cant upload video: {indexes} {video}\n')
-            print('-----------------------------------------------------------------------------------------\n')
-
-
 def main():
-    count = args.count
-    is_single = args.single
-    t_datas = get_single_datas(usr, C_TIKTOK_V, count) if is_single else get_grouped_datas(usr, C_TIKTOK_V, count)
-    s_datas = get_single_datas(usr, C_VIDEO, count) if is_single else get_grouped_datas(usr, C_VIDEO, count)
-    uploaded_videos.clear()
+    tiktok = args.tiktok
+    caption = args.caption.replace('-', ' ')
+    products = args.products.split(',')
 
-    if len(t_datas) <= 0:
-        print('No available data. Run collect.py to get more data.')
+    video = download_tiktok(tiktok)
+    if _non_empty_file(video):
+        __publish_video(video, caption, products)
     else:
-        process_data(t_datas)
-
-    if len(s_datas) <= 0:
-        print('No available data. Run collect.py to get more data.')
-    else:
-        process_data(s_datas, True)
-
-    print('=========================================================================================\n')
-    print(f'Total Uploaded: {len(uploaded_videos)}')
-    print(f'Total Cancelled: {len(t_datas) + len(s_datas) - len(uploaded_videos)}\n')
-    print('=========================================================================================\n')
+        print(f'Cant upload video: {video}\n')
+        print('-----------------------------------------------------------------------------------------\n')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("username", help="Shopee username", type=str)
-    parser.add_argument("count", help="Limit the video count to upload", type=int, default=1)
-    parser.add_argument("--single", "-s", action="store_true", help="Upload with single product", default=False)
+    parser.add_argument("username", help="Shopee Username", type=str)
+    parser.add_argument("tiktok", help="Tiktok Link", type=str)
+    parser.add_argument("products", help="Product Links, separated with '-'", type=str)
+    parser.add_argument("--caption", '-c', help="Caption with hashtags", type=str, default='')
     args = parser.parse_args()
     usr = args.username
 
@@ -250,7 +192,4 @@ if __name__ == '__main__':
         "appium:disableWindowAnimation": True
     }
     options = UiAutomator2Options().load_capabilities(capabilities)
-
-    uploaded_videos = []
-
     main()

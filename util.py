@@ -15,6 +15,7 @@ def delete_file(file: str):
 
 
 def save_products(data: dict, usr: str):
+    size_before = 0
     base_dir = "data/scrap"
     full_path = f"{base_dir}/products_{usr}.csv"
     os.makedirs(base_dir, exist_ok=True)
@@ -23,6 +24,7 @@ def save_products(data: dict, usr: str):
     try:
         if Path(full_path).exists():
             existing = pd.read_csv(full_path)
+            size_before = len(existing)
             if not existing.empty:
                 df = pd.concat([existing, df])
         print(f'After concat dataframe: {len(df)}')
@@ -35,7 +37,8 @@ def save_products(data: dict, usr: str):
         pass
     finally:
         df.to_csv(full_path, index=False)
-        print(f'Current Entries: {len(df.index)} items')
+        addition = len(df) - size_before
+        print(f'Products Added: {addition} items.\nCurrent Entries: {len(df.index)} items')
 
 
 def _reset_all_uploaded_to_false(usr: str):
