@@ -110,25 +110,29 @@ def __publish_video(video_file: str, caption: str, product_links: list):
                     try:
                         wait.until(ec.visibility_of_element_located((By.XPATH, path_affiliate_tab))).click()
                         break
-                    except Exception as e:
-                        print(e)
+                    except:
                         driver.back()
                         wait.until(ec.visibility_of_element_located((By.ID, add_id))).click()
                         pass
 
                 wait.until(ec.visibility_of_element_located((By.XPATH, path_fav_tab))).click()
                 max_scroll_attempts = 2
-                for _ in range(max_scroll_attempts):
+                for _ in range(max_scroll_attempts + 1):
+                    found = False
                     try:
                         locator = By.ANDROID_UIAUTOMATOR, 'new UiSelector().text("Tambah")'
-                        WebDriverWait(driver, 3).until(ec.visibility_of_element_located(locator)).click()
-                        wait.until(ec.visibility_of_element_located((By.XPATH, path_done_add_product))).click()
-                        break
+                        WebDriverWait(driver, 2).until(ec.visibility_of_element_located(locator)).click()
+                        found = True
                     except:
                         if _ < max_scroll_attempts:
                             driver.swipe(center_x, bottom_y * 0.5, center_x, bottom_y * 0.2, 100)
                         else:
                             driver.back()
+                            break
+                    finally:
+                        if found:
+                            wait.until(ec.visibility_of_element_located((By.XPATH, path_done_add_product))).click()
+                            tagged_product += 1
                             break
 
             # Save to Draft
