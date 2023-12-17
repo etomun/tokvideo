@@ -160,9 +160,10 @@ def _non_empty_file(file) -> bool:
 
 
 def main():
-    tiktok = args.tiktok
-    caption = args.caption.replace('-', ' ')
-    products = args.products.split(',')
+    tiktok = input("Enter Tiktok URL: ")
+    products = input("Enter Product URLs (separated with comma): ")
+    products = products.split(',')
+    caption = input("Enter Caption: ")
 
     video = download_tiktok(tiktok)
     if _non_empty_file(video):
@@ -175,9 +176,6 @@ def main():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("username", help="Shopee Username", type=str)
-    parser.add_argument("tiktok", help="Tiktok Link", type=str)
-    parser.add_argument("products", help="Product Links, separated with '-'", type=str)
-    parser.add_argument("--caption", '-c', help="Caption with hashtags", type=str, default='')
     args = parser.parse_args()
     usr = args.username
 

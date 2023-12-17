@@ -3,12 +3,13 @@ import concurrent.futures.thread
 import re
 from argparse import Namespace
 
+import numpy as np
 import requests
 
 from __table import *
 from _shopee import get_product_offers
 from _tiktok import get_tiktok_link
-from util import save_products
+from util import save_csv
 
 
 def __get_args() -> Namespace:
@@ -91,20 +92,14 @@ def __parse_response(filtered_products: list, keyword: str = "", hashtags: str =
     is_officials = list(map(lambda p: p['batch_item_for_item_card_full']['is_official_shop'], filtered_products))
     est_commissions = [r * p * 0.01 for r, p in zip(seller_rates, prices)]
     keywords = [keyword] * filtered_count
-    is_uploads = [False] * filtered_count
     tiktok_keywords = list(map(__generate_tit_kok_keywords, shop_names, titles))
     additional_hashtags = [hashtags] * filtered_count
 
-    print(f'\nGet Tiktok video for {len(tiktok_keywords)} items')
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        tok_videos = list(executor.map(lambda q: get_tiktok_link(q, not args.headed), tiktok_keywords))
     data = {
-        C_IS_UPLOADED: is_uploads,
         C_KEYWORD: keywords,
         C_HASHTAGS: additional_hashtags,
         C_TIKTOK_K: tiktok_keywords,
         C_LINK: links,
-        C_TIKTOK_V: tok_videos,
         C_VIDEO: videos,
         C_TITLE: titles,
         C_SHOP_NAME: shop_names,
@@ -122,6 +117,24 @@ def __parse_response(filtered_products: list, keyword: str = "", hashtags: str =
     }
 
     return data
+
+
+def __search_tiktok_links(products: dict):
+    keywords = np.array(products[C_TIKTOK_K])
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        links = dict(executor.map(lambda q: get_tiktok_link(q, not args.headed), keywords))
+    data = {C_TIKTOK_V: [], C_TIKTOK_K: [], C_LINK: [], C_IS_UPLOADED: []}
+    for keyword, tiktok_links in links.items():
+        # Map the key to the corresponding product_link and tiktok_keyword using NumPy
+        index = np.where(keywords == keyword)[0][0]
+        product_link = products[C_LINK][index]
+
+        # Extend the result lists using NumPy array operations
+        data[C_TIKTOK_V].extend(tiktok_links)
+        data[C_TIKTOK_K].extend(np.full(len(tiktok_links), keyword))
+        data[C_LINK].extend(np.full(len(tiktok_links), product_link))
+        data[C_IS_UPLOADED].extend(np.full(len(tiktok_links), False))
+    save_csv(f"data/scrap/tiktoks_{args.username}.csv", data)
 
 
 def get_limits(total_limit):
@@ -149,14 +162,15 @@ def __search_products(keyword_limit: dict) -> dict:
     else:
         print(f"Retrieved {len(filtered_products)} items for {keyword}")
         final_products = filtered_products[:1] if args.headed else filtered_products
-        hashtags = '#' + ' #'.join(word.replace('-', '') for word in args.hashtags.split(','))
+        hashtags = '#' + ' #'.join(word.replace('-', '') for word in args.hashtags.split(',')) if args.hashtags else ""
         return __parse_response(final_products, keyword, hashtags)
 
 
 def collect_products(keywords: list, limit: int):
     if all(s == '' for s in keywords):
         single_result = __search_products({'keyword': '', 'limit': limit})
-        save_products(single_result, args.username)
+        save_csv(f"data/scrap/products_{args.username}.csv", single_result)
+        __search_tiktok_links(single_result)
 
     else:
         keywords_n_limits = list(map(lambda q: dict({'keyword': q, 'limit': limit}), keywords))
@@ -169,7 +183,8 @@ def collect_products(keywords: list, limit: int):
                 if k not in merged:
                     merged[k] = []
                 merged[k].extend(d[k])
-        save_products(merged, args.username)
+        save_csv(f"data/scrap/products_{args.username}.csv", merged)
+        __search_tiktok_links(merged)
 
 
 def main():

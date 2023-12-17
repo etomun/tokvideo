@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from pandas.core.groupby import DataFrameGroupBy
 
-from __table import C_IS_UPLOADED, C_STOCK, C_TIKTOK_V
+from __table import C_IS_UPLOADED, C_STOCK
 
 
 def delete_file(file: str):
@@ -14,31 +14,20 @@ def delete_file(file: str):
         os.remove(file)
 
 
-def save_products(data: dict, usr: str):
-    size_before = 0
-    base_dir = "data/scrap"
-    full_path = f"{base_dir}/products_{usr}.csv"
-    os.makedirs(base_dir, exist_ok=True)
-    df = pd.DataFrame.from_dict(data)
-    print(f'New dataframe: {len(df)}')
-    try:
-        if Path(full_path).exists():
-            existing = pd.read_csv(full_path)
-            size_before = len(existing)
-            if not existing.empty:
-                df = pd.concat([existing, df])
-        print(f'After concat dataframe: {len(df)}')
-        df = df.dropna(subset=[C_TIKTOK_V])
-        print(f'After drop empty Tiktok dataframe: {len(df)}')
-        df = df.drop_duplicates()
-        print(f'Final dataframe: {len(df)}')
-    except Exception as e:
-        print(e)
-        pass
-    finally:
-        df.to_csv(full_path, index=False)
-        addition = len(df) - size_before
-        print(f'Products Added: {addition} items.\nCurrent Entries: {len(df.index)} items')
+def save_csv(file_path: str, data: dict):
+    if os.path.exists(file_path):
+        existing_df = pd.read_csv(file_path)
+    else:
+        existing_df = pd.DataFrame()
+
+    print(f'Existing {len(existing_df)} rows')
+    new_df = pd.DataFrame(data)
+    print(f'Add new {len(new_df)} rows')
+    merged_df = pd.concat([existing_df, new_df], axis=1)
+    print(f'Merged become: {len(new_df)} rows')
+    final_df = merged_df.drop_duplicates()
+    print(f'Final distinct: {len(new_df)} rows')
+    final_df.to_csv(file_path, index=False)
 
 
 def _reset_all_uploaded_to_false(usr: str):
@@ -73,7 +62,7 @@ def _default():
 
 def set_entry_uploaded(index: int, usr: str) -> bool:
     try:
-        df_file = f'data/scrap/products_{usr}.csv'
+        df_file = f'data/scrap/tiktok_{usr}.csv'
         if Path(df_file).exists():
             df = pd.read_csv(df_file)
             df.loc[index, C_IS_UPLOADED] = True
