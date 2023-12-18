@@ -4,6 +4,7 @@ import subprocess
 import time
 from os import makedirs
 from pathlib import PurePosixPath
+from subprocess import PIPE
 from urllib.parse import unquote, urlparse
 
 import requests
@@ -51,7 +52,7 @@ def set_fav_product(usr: str, product_link: str, is_fav: bool) -> bool:
     ]
 
     try:
-        process = subprocess.Popen(curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(curl_command, stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
 
         # Check if successful (exit code 0)
@@ -106,6 +107,49 @@ def get_product_offers(usr: str, keyword: str, limit: int) -> list:
     if len(products) <= 0:
         print('Get no offer\n')
     return products
+
+
+def get_related_products(usr: str, product_link: str) -> str:
+    shop_id, product_id = PurePosixPath(unquote(urlparse(product_link).path)).parts[-2:]
+    cookies_dic = _get_cookies(usr)
+    cookies = '; '.join([f'{key}={value}' for key, value in cookies_dic.items()])
+    url = f'https://shopee.co.id/api/v4/pdp/hot_sales/get?item_id={product_id}&limit=8&offset=0&shop_id={shop_id}'
+    curl = f"curl '{url}' \
+      -H 'authority: shopee.co.id' \
+      -H 'accept: application/json' \
+      -H 'accept-language: en-US,en;q=0.9' \
+      -H 'content-type: application/json' \
+      -H 'cookie: {cookies}' \
+      -H 'priority: u=1, i' \
+      -H 'sec-ch-ua: \"Chromium\";v=\"121\", \"Not A(Brand\";v=\"99\"' \
+      -H 'sec-ch-ua-mobile: ?0' \
+      -H 'sec-ch-ua-platform: \"macOS\"' \
+      -H 'sec-fetch-dest: empty' \
+      -H 'sec-fetch-mode: cors' \
+      -H 'sec-fetch-site: same-origin' \
+      -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36' \
+      -H 'x-api-source: pc' \
+      -H 'x-csrftoken: {_get_crf_token(usr)}' \
+      -H 'x-requested-with: XMLHttpRequest' \
+      -H 'x-sap-ri: 52757f65755ff36428a31a320101a620874b87d329f1e0ea1525' \
+      -H 'x-sap-sec: 7donwtUbd63Zc63ZQb3mc6eZQb3Zc6eZc63ac63Z36cZcM3xc63Gc63ZnBqkqVZZc67ZcH3Zw6LZcKYVtHG5nFLWff5/+oiNzYvaoFiaT2de6ziTD0HuTonkqmlVNRGeMgDsPOIp4piZMYwrl4yAiy0OEVIs2+PyD/t2N5I/VDi1LwqWCgGmnzMxreToOSlSEDkOF+jEWDZmSv6BbfDVOp9cEizSsQBP9q0S5RDLq3a0WmWzmcPehdcFKmu+JY3bVuxuqMO4nEPhOQSKiFkr2X5JG1ifTIkpwsGfoziTlM25Kk84t2wE4tf5oIGobevcSkEGPWH2O11++MTBA8Oye5Re7iM3ADCRnqV4pRxZ+gUSs3A9ZthKuHPXf5S3Fq2JWA8GlwHzv5U89NXFN0vZtMnuO7TgZk/eu0QNpKch35gJoFBUWzKab8sQoiY8Qjd6rfwZ8NMdX2SBHX4QHPN2b6wWRaSl1m37ZHbQDhlaOaLoq+M9v+9A+oOdSENzAUXat6pG+1BmWN/m4eJ9ilMaExjqvB3zKx6o5EmO6ULuQmlxiIlXKoFxvuYMN+/NS+qYxfZv337BqducU6QSUH52t8ddNgPjEF8zOeKYw4u6oXJMJfLpA3A6qrI2JTOGMCwkqNWC+mqnVjRaX7OnBjArDS6cR63Zc/GSeEMILEZIc63ZcN1kqW8mc63Z+63Zc7eZc67oTNZq3VbWTKXdnayGfz+p9mKJ+HZZc63oE/ZELhKKeb3Zc63mc6UZR63Gc6ZZc63mc63Z+63Zc7eZc6/n90GfYjsssZTU3fMdQ/eUopby1VZZc63pehE/KEPJ2H3Zc6/=' \
+      -H 'x-shopee-language: id' \
+      -H 'x-sz-sdk-version: 3.3.0-2&1.6.8' \
+      --compressed"
+    try:
+        process = subprocess.Popen(curl, shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = process.communicate()
+        if process.returncode == 0:
+            response = json.loads(stdout.decode('utf-8'))
+            datas = response['data']['items']
+            links = [f"https://shopee.co.id/product/{d['shopid']}/{d['itemid']}" for d in datas]
+            return ','.join(links)
+        else:
+            print(f"Error running cURL command. stderr: {stderr.decode('utf-8')}")
+            return ''
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return ''
 
 
 def _get_cookies(usr: str) -> dict:

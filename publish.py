@@ -13,10 +13,10 @@ from pandas.core.groupby import DataFrameGroupBy
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
 
-from __table import C_LINK, C_TIKTOK_V, C_EST_COMM, C_TITLE, C_HASHTAGS, C_SHOP_NAME, C_VIDEO
+from __table import C_LINK, C_EST_COMM, C_TITLE, C_HASHTAGS, C_SHOP_NAME
 from _shopee import set_fav_product
-from _ssstik import download_tiktok, download_shop_video
-from util import delete_file, set_entry_uploaded, get_single_datas, get_grouped_datas
+from _ssstik import download_tiktok
+from util import delete_file, set_entry_uploaded, get_datas
 
 
 def __push_to_remote_device(file: str, album_name: str) -> bool:
@@ -45,7 +45,7 @@ def __remove_from_remote_device(video_file: str, album_name: str) -> bool:
         return False
 
 
-def __publish_video(video_file: str, caption: str, products: DataFrame):
+def __publish_video(video_url: str, video_file: str, caption: str, products: DataFrame):
     print(f'\nReady to upload: {video_file}')
     all_fav_true = all(set_fav_product(usr, p[C_LINK], True) for i, p in products.iterrows())
     album_name = PurePosixPath(unquote(urlparse(video_file).path)).parts[-1:][0].split('.')[-2:][0]
@@ -146,8 +146,7 @@ def __publish_video(video_file: str, caption: str, products: DataFrame):
                 ec.visibility_of_element_located((By.ID, "com.shopee.id.dfpluginshopee16:id/tv_drafts_box"))).click()
 
             # Succeed
-            for i in products.index:
-                set_entry_uploaded(i, usr)
+            set_entry_uploaded(video_url, usr)
 
             uploaded_videos.append(f'{video_file} -- {products}')
             delete_file(video_file)
@@ -179,12 +178,12 @@ def _non_empty_file(file) -> bool:
 
 
 def shuffle_hashtags() -> str:
-    hashtags = '#RacunShopee #ViralDiShopeeVideo #BadaiTapiBudget #SultanShopeeVideo'.split()
+    hashtags = '#RacunShopee #ViralDiShopeeVideo #BadaiTapiBudget #SpillRacunShopee'.split()
     random.shuffle(hashtags)
     return ' '.join(hashtags)
 
 
-def process_data(datas: DataFrameGroupBy, is_shop_video: bool = False):
+def process_data(datas: DataFrameGroupBy):
     for video_url, rows in datas:
         # take max 6 products to attach, the rest will not be published
         filtered_df = rows.sort_values(by=C_EST_COMM).tail(6)
@@ -199,9 +198,9 @@ def process_data(datas: DataFrameGroupBy, is_shop_video: bool = False):
         title_len = min(len(title), remaining_len)
         caption = f"{title[:title_len]} {hashtags}"
 
-        video = download_shop_video(str(video_url)) if is_shop_video else download_tiktok(str(video_url))
+        video = download_tiktok(str(video_url))
         if _non_empty_file(video):
-            __publish_video(video, caption, filtered_df)
+            __publish_video(str(video_url), video, caption, filtered_df)
         else:
             indexes = rows.index
             print(f'Cant upload video: {indexes} {video}\n')
@@ -210,24 +209,14 @@ def process_data(datas: DataFrameGroupBy, is_shop_video: bool = False):
 
 def main():
     count = args.count
-    is_single = args.single
-    t_datas = get_single_datas(usr, C_TIKTOK_V, count) if is_single else get_grouped_datas(usr, C_TIKTOK_V, count)
-    s_datas = get_single_datas(usr, C_VIDEO, count) if is_single else get_grouped_datas(usr, C_VIDEO, count)
-    uploaded_videos.clear()
-
-    if len(t_datas) <= 0:
+    datas = get_datas(usr, count)
+    if len(datas) <= 0:
         print('No available data. Run collect.py to get more data.')
     else:
-        process_data(t_datas)
-
-    if len(s_datas) <= 0:
-        print('No available data. Run collect.py to get more data.')
-    else:
-        process_data(s_datas, True)
-
+        process_data(datas)
     print('=========================================================================================\n')
     print(f'Total Uploaded: {len(uploaded_videos)}')
-    print(f'Total Cancelled: {len(t_datas) + len(s_datas) - len(uploaded_videos)}\n')
+    print(f'Total Cancelled: {len(datas) - len(uploaded_videos)}\n')
     print('=========================================================================================\n')
 
 
@@ -235,7 +224,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("username", help="Shopee username", type=str)
     parser.add_argument("count", help="Limit the video count to upload", type=int, default=1)
-    parser.add_argument("--single", "-s", action="store_true", help="Upload with single product", default=False)
     args = parser.parse_args()
     usr = args.username
 

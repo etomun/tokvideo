@@ -84,12 +84,9 @@ def __parse_response(filtered_products: list, keyword: str = "", hashtags: str =
     seller_rates = list(map(lambda p: __int(p['seller_commission_rate']), filtered_products))
     default_rates = list(map(lambda p: __int(p['default_commission_rate']), filtered_products))
     total_rates = [s + d for s, d in zip(seller_rates, default_rates)]
-    images = list(map(lambda p: p['batch_item_for_item_card_full']['image'], filtered_products))
-    videos = list(map(__get_shop_video, filtered_products))
     stocks = list(map(lambda p: p['batch_item_for_item_card_full']['stock'], filtered_products))
     ratings = list(map(lambda p: p['batch_item_for_item_card_full']['shop_rating'], filtered_products))
     prices = list(map(lambda p: __int(p['batch_item_for_item_card_full']['price']) / 100000, filtered_products))
-    is_officials = list(map(lambda p: p['batch_item_for_item_card_full']['is_official_shop'], filtered_products))
     est_commissions = [r * p * 0.01 for r, p in zip(seller_rates, prices)]
     keywords = [keyword] * filtered_count
     tiktok_keywords = list(map(__generate_tit_kok_keywords, shop_names, titles))
@@ -100,7 +97,6 @@ def __parse_response(filtered_products: list, keyword: str = "", hashtags: str =
         C_HASHTAGS: additional_hashtags,
         C_TIKTOK_K: tiktok_keywords,
         C_LINK: links,
-        C_VIDEO: videos,
         C_TITLE: titles,
         C_SHOP_NAME: shop_names,
         C_STOCK: stocks,
@@ -110,10 +106,8 @@ def __parse_response(filtered_products: list, keyword: str = "", hashtags: str =
         C_SELLER_RATE: seller_rates,
         C_DEFAULT_RATE: default_rates,
         C_RATING: ratings,
-        C_IMAGE: images,
         C_SHOP_ID: shop_ids,
         C_ID: product_ids,
-        C_IS_OFFICIAL: is_officials
     }
 
     return data
@@ -130,10 +124,10 @@ def __search_tiktok_links(products: dict):
         product_link = products[C_LINK][index]
 
         # Extend the result lists using NumPy array operations
+        data[C_IS_UPLOADED].extend(np.full(len(tiktok_links), False))
+        data[C_LINK].extend(np.full(len(tiktok_links), product_link))
         data[C_TIKTOK_V].extend(tiktok_links)
         data[C_TIKTOK_K].extend(np.full(len(tiktok_links), keyword))
-        data[C_LINK].extend(np.full(len(tiktok_links), product_link))
-        data[C_IS_UPLOADED].extend(np.full(len(tiktok_links), False))
     save_csv(f"data/scrap/tiktoks_{args.username}.csv", data)
 
 

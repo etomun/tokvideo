@@ -92,5 +92,8 @@ def get_tiktok_link(keyword: str, is_headless: bool = True) -> tuple[str, list[s
 
 
 if __name__ == '__main__':
-    # get_tiktok_link("Sirup Abc", False)
+    # df = pd.read_csv('data/scrap/tiktoks_bellekit99.csv')
+    # df[C_IS_UPLOADED] = False
+    # df.to_csv('data/scrap/tiktoks_bellekit99.csv', index=False)
+    # get_tiktok_link("Baby Fun", False)
     __login()
