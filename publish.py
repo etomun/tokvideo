@@ -103,10 +103,10 @@ def __publish_video(video_url: str, video_file: str, caption: str, products: Dat
             wait.until(ec.visibility_of_element_located((By.ID, "com.shopee.id.dfpluginshopee16:id/tv_right"))).click()
 
             # Loop attach products
-            tagged_product = 0
+            finish_tagging = False
             total_product = len(products)
-            for i, link in enumerate(products):
-                if tagged_product >= total_product:
+            for i in range(total_product):
+                if finish_tagging:
                     break
 
                 add_id = id_attach_product if i == 0 else id_add_more_product
@@ -117,6 +117,9 @@ def __publish_video(video_url: str, video_file: str, caption: str, products: Dat
                         wait.until(ec.visibility_of_element_located((By.XPATH, path_affiliate_tab))).click()
                         break
                     except:
+                        if _ == 2:
+                            # Avoid infinity loop when the Affiliate tab doesn't appear
+                            finish_tagging = True
                         driver.back()
                         wait.until(ec.visibility_of_element_located((By.ID, add_id))).click()
                         pass
@@ -133,12 +136,15 @@ def __publish_video(video_url: str, video_file: str, caption: str, products: Dat
                         if _ < max_scroll_attempts:
                             driver.swipe(center_x, bottom_y * 0.5, center_x, bottom_y * 0.2, 100)
                         else:
+                            # Avoid infinity loop when the Affiliate tab doesn't appear
+                            finish_tagging = True
                             driver.back()
                             break
                     finally:
                         if found:
+                            if i == total_product - 1:
+                                finish_tagging = True
                             wait.until(ec.visibility_of_element_located((By.XPATH, path_done_add_product))).click()
-                            tagged_product += 1
                             break
 
             # Save to Draft
