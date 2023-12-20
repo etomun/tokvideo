@@ -15,7 +15,7 @@ def delete_file(file: str):
         os.remove(file)
 
 
-def save_csv(file_path: str, data: dict):
+def save_csv(file_path: str, data: dict, duplicate_subset: list):
     if os.path.exists(file_path):
         existing_df = pd.read_csv(file_path)
     else:
@@ -26,7 +26,7 @@ def save_csv(file_path: str, data: dict):
     print(f'Add new {len(new_df)} rows')
     merged_df = pd.concat([existing_df, new_df])
     print(f'Merged become: {len(merged_df)} rows')
-    final_df = merged_df.drop_duplicates()
+    final_df = merged_df.drop_duplicates(subset=duplicate_subset).reset_index(drop=True)
     print(f'Final distinct: {len(final_df)} rows')
     final_df.to_csv(file_path, index=False)
 

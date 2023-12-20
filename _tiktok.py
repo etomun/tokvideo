@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+import re
 import time
 import urllib.parse
 from argparse import Namespace
@@ -62,14 +63,14 @@ def __tiktok_page(headless: bool = True) -> tuple[Page]:
         try:
             context = browser.new_context(storage_state=f"data/auth/tiktok_session_ware.stock.json")
             yield context.new_page()
-        except Exception as e:
+        except RuntimeError as e:
             print(e)
-            yield browser.new_context().new_page()
         browser.close()
 
 
 def get_tiktok_link(keyword: str, is_headless: bool = True) -> tuple[str, list[str]]:
-    encoded_keywords = urllib.parse.quote(keyword)
+    clean_keyword = re.sub(r'\b' + re.escape('sexy') + r'\b', 'seksi', keyword, flags=re.IGNORECASE)
+    encoded_keywords = urllib.parse.quote(clean_keyword)
     print(f"Search tiktok links for {keyword}")
     with __tiktok_page(headless=is_headless) as (page):
         page.goto(f"https://www.tiktok.com/search/video?q={encoded_keywords}")
@@ -86,14 +87,15 @@ def get_tiktok_link(keyword: str, is_headless: bool = True) -> tuple[str, list[s
             list_video = page.wait_for_selector('div[id=tabs-0-panel-search_video]', timeout=10 * 1000)
             # List of Selectors -> <Selector query='@href' data='https://www....'>
             links = Selector(text=list_video.inner_html()).css('a').xpath('@href').getall()
+            # pics = Selector(text=list_video.inner_html()).css('img').xpath('@srcset').getall()
+            # print(pics)
+
             # Filter video links
             results = [link for link in links if link.startswith("https://www.tiktok.com/@")]
+            # return keyword, results[:5]
             return keyword, results
 
 
 if __name__ == '__main__':
-    # df = pd.read_csv('data/scrap/tiktoks_bellekit99.csv')
-    # df[C_IS_UPLOADED] = False
-    # df.to_csv('data/scrap/tiktoks_bellekit99.csv', index=False)
-    # get_tiktok_link("Baby Fun", False)
-    __login()
+    get_tiktok_link("Manja Girl Dress Seksi 1 Set Ada", False)
+    # __login()

@@ -86,9 +86,10 @@ def get_product_offers(usr: str, keyword: str, limit: int) -> list:
     for i, page_limit in enumerate(get_limits(limit)):
         page_offset = i * 50
 
-        # sort by commission
+        # sort by commission (5)
+        # sort by selling (2)
         # filter by Extra Commission
-        querystring = {"keyword": keyword, "list_type": 0, "match_type": 1, "sort_type": 5, "page_offset": page_offset,
+        querystring = {"keyword": keyword, "list_type": 0, "match_type": 1, "sort_type": 2, "page_offset": page_offset,
                        "page_limit": page_limit, "client_type": 1, "filter_types": 2, "filter_shop_types": 1}
         response = requests.request("GET", url,
                                     cookies=_get_cookies(usr),

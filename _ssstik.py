@@ -37,7 +37,7 @@ def __post_link(tiktok_url: str):
     params = {'url': 'dl', }
     data = {'id': tiktok_url, 'locale': 'en', 'tt': 'ZUY2YXM1', }
     r = requests.post('https://ssstik.io/abc', params=params, cookies=__cookies, headers=__headers, data=data)
-    print(f'{r}: Generated Tiktok link by requests {tiktok_url}')
+    print(f'{r}: Submit {tiktok_url} to ssstik')
 
 
 def get_old_video(video_url: str, shop_url: str) -> str:

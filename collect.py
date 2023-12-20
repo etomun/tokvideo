@@ -128,7 +128,7 @@ def __search_tiktok_links(products: dict):
         data[C_LINK].extend(np.full(len(tiktok_links), product_link))
         data[C_TIKTOK_V].extend(tiktok_links)
         data[C_TIKTOK_K].extend(np.full(len(tiktok_links), keyword))
-    save_csv(f"data/scrap/tiktoks_{args.username}.csv", data)
+    save_csv(f"data/scrap/tiktoks_{args.username}.csv", data, [C_TIKTOK_V])
 
 
 def get_limits(total_limit):
@@ -163,7 +163,7 @@ def __search_products(keyword_limit: dict) -> dict:
 def collect_products(keywords: list, limit: int):
     if all(s == '' for s in keywords):
         single_result = __search_products({'keyword': '', 'limit': limit})
-        save_csv(f"data/scrap/products_{args.username}.csv", single_result)
+        save_csv(f"data/scrap/products_{args.username}.csv", single_result, [C_LINK])
         __search_tiktok_links(single_result)
 
     else:
@@ -177,7 +177,7 @@ def collect_products(keywords: list, limit: int):
                 if k not in merged:
                     merged[k] = []
                 merged[k].extend(d[k])
-        save_csv(f"data/scrap/products_{args.username}.csv", merged)
+        save_csv(f"data/scrap/products_{args.username}.csv", merged, [C_LINK])
         __search_tiktok_links(merged)
 
 

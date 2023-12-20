@@ -13,7 +13,7 @@ from pandas.core.groupby import DataFrameGroupBy
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
 
-from __table import C_LINK, C_EST_COMM, C_TITLE, C_HASHTAGS, C_SHOP_NAME
+from __table import C_LINK, C_EST_COMM, C_TITLE, C_HASHTAGS
 from _shopee import set_fav_product
 from _ssstik import download_tiktok
 from util import delete_file, set_entry_uploaded, get_datas
@@ -198,8 +198,7 @@ def process_data(datas: DataFrameGroupBy):
         last = filtered_df.iloc[-1].fillna('')
 
         title = last[C_TITLE]
-        product_hashtags = f'#{(last[C_SHOP_NAME].split()[0])} {last[C_HASHTAGS]}'
-        hashtags = f'{product_hashtags} {shuffle_hashtags()}'
+        hashtags = f'{shuffle_hashtags()} {last[C_HASHTAGS]}'
         remaining_len = 149 - len(hashtags)
         title_len = min(len(title), remaining_len)
         caption = f"{title[:title_len]} {hashtags}"
