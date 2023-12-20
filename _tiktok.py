@@ -97,5 +97,4 @@ def get_tiktok_link(keyword: str, is_headless: bool = True) -> tuple[str, list[s
 
 
 if __name__ == '__main__':
-    get_tiktok_link("Manja Girl Dress Seksi 1 Set Ada", False)
-    # __login()
+    __login()
