@@ -177,8 +177,9 @@ def collect_products(keywords: list, limit: int):
                 if k not in merged:
                     merged[k] = []
                 merged[k].extend(d[k])
-        save_csv(f"data/scrap/products_{args.username}.csv", merged, [C_LINK])
-        __search_tiktok_links(merged)
+        if len(merged) > 0:
+            save_csv(f"data/scrap/products_{args.username}.csv", merged, [C_LINK])
+            __search_tiktok_links(merged)
 
 
 def main():
